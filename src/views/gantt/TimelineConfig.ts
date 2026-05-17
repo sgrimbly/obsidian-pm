@@ -57,11 +57,23 @@ export function buildTimelineConfig(tasks: Task[], granularity: GanttGranularity
   let startDate = dates.reduce((min, d) => (Temporal.PlainDate.compare(d, min) < 0 ? d : min), dates[0])
   let endDate = dates.reduce((max, d) => (Temporal.PlainDate.compare(d, max) > 0 ? d : max), dates[0])
 
-  // Add padding
-  startDate = startDate.subtract({ days: 7 })
-  endDate = endDate.add({ days: 14 })
+  // Granularity-aware padding past the data range. This makes the timeline
+  // feel continuous (Notion-style): you can scroll forward/backward into
+  // empty space — "year" granularity defaults to showing 1 year visible
+  // but you can scroll further past where data exists.
+  const PADDING_DAYS: Record<GanttGranularity, number> = {
+    day: 7,
+    week: 14,
+    month: 60,
+    quarter: 180,
+    year: 365
+  }
+  const pad = PADDING_DAYS[granularity]
+  startDate = startDate.subtract({ days: pad })
+  endDate = endDate.add({ days: pad })
 
-  // Enforce minimum visible range based on granularity
+  // Enforce minimum visible range based on granularity (already handled by
+  // padding above for sparse data, but kept for safety with tiny ranges).
   const currentSpan = endDate.since(startDate, { largestUnit: 'days' }).days
   if (currentSpan < MIN_DAYS[granularity]) {
     const extra = Math.ceil((MIN_DAYS[granularity] - currentSpan) / 2)
