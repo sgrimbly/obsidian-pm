@@ -50,21 +50,34 @@ export function renderTimelineHeader(ctx: RendererContext): void {
 }
 
 function renderYearHeader(g: SVGGElement, ctx: RendererContext): void {
-  renderYearBands(g, 0, 24, ctx)
-  const { startDate } = ctx.cfg
-  let date = Temporal.PlainDate.from({ year: startDate.year, month: 1, day: 1 })
-  while (Temporal.PlainDate.compare(date, ctx.cfg.endDate) < 0) {
-    const nextYearStart = date.add({ years: 1 })
-    const x1 = Math.max(0, dateToX(ctx.cfg, date))
-    const x2 = Math.min(ctx.cfg.totalWidth, dateToX(ctx.cfg, nextYearStart))
-    const text = svgEl('text', {
-      x: x1 + (x2 - x1) / 2,
-      y: 44,
-      class: 'pm-gantt-header-quarter'
-    })
-    text.textContent = String(date.year)
-    g.appendChild(text)
-    date = nextYearStart
+  // Top tier: month bands with "Mon 'YY" labels.
+  renderMonthBands(g, 0, 24, ctx)
+  // Bottom tier: tick at every Monday, date label every other Monday.
+  const { startDate, totalDays, dayWidth } = ctx.cfg
+  let mondayCount = 0
+  for (let i = 0; i < totalDays; i++) {
+    const d = startDate.add({ days: i })
+    if (d.dayOfWeek !== 1) continue
+    mondayCount++
+    const x = i * dayWidth
+    g.appendChild(
+      svgEl('line', {
+        x1: x,
+        y1: 24,
+        x2: x,
+        y2: HEADER_HEIGHT,
+        class: 'pm-gantt-header-tick'
+      })
+    )
+    if (mondayCount % 2 === 0) {
+      const text = svgEl('text', {
+        x: x + 3,
+        y: 42,
+        class: 'pm-gantt-header-day-small'
+      })
+      text.textContent = String(d.day)
+      g.appendChild(text)
+    }
   }
 }
 
@@ -149,54 +162,73 @@ function renderWeekHeader(g: SVGGElement, ctx: RendererContext): void {
 }
 
 function renderMonthHeader(g: SVGGElement, ctx: RendererContext): void {
-  renderYearBands(g, 0, 24, ctx)
-  let monthStart = ctx.cfg.startDate.with({ day: 1 })
-  while (Temporal.PlainDate.compare(monthStart, ctx.cfg.endDate) < 0) {
-    const nextMonthStart = monthStart.add({ months: 1 })
-    const x1 = Math.max(0, dateToX(ctx.cfg, monthStart))
-    const x2 = Math.min(ctx.cfg.totalWidth, dateToX(ctx.cfg, nextMonthStart))
-    const w = x2 - x1
-    const text = svgEl('text', {
-      x: x1 + w / 2,
-      y: 44,
-      class: 'pm-gantt-header-month'
-    })
-    text.textContent = monthStart.toLocaleString(undefined, { month: 'short' })
-    g.appendChild(text)
-    g.appendChild(
-      svgEl('line', {
-        x1,
-        y1: 24,
-        x2: x1,
-        y2: HEADER_HEIGHT,
-        class: 'pm-gantt-header-tick'
+  // Top tier: month bands.
+  renderMonthBands(g, 0, 24, ctx)
+  // Bottom tier: day-of-month numbers + weekend shading.
+  const { startDate, totalDays, dayWidth } = ctx.cfg
+  for (let i = 0; i < totalDays; i++) {
+    const d = startDate.add({ days: i })
+    const x = i * dayWidth
+    const isWeekend = d.dayOfWeek === 6 || d.dayOfWeek === 7
+    if (isWeekend) {
+      g.appendChild(
+        svgEl('rect', {
+          x,
+          y: 24,
+          width: dayWidth,
+          height: HEADER_HEIGHT - 24,
+          class: 'pm-gantt-weekend-header'
+        })
+      )
+    }
+    if (d.dayOfWeek === 1) {
+      g.appendChild(
+        svgEl('line', {
+          x1: x,
+          y1: 24,
+          x2: x,
+          y2: HEADER_HEIGHT,
+          class: 'pm-gantt-header-tick'
+        })
+      )
+    }
+    if (dayWidth >= 18) {
+      const text = svgEl('text', {
+        x: x + dayWidth / 2,
+        y: 42,
+        class: 'pm-gantt-header-day'
       })
-    )
-    monthStart = nextMonthStart
+      text.textContent = String(d.day)
+      g.appendChild(text)
+    }
   }
 }
 
 function renderQuarterHeader(g: SVGGElement, ctx: RendererContext): void {
-  renderYearBands(g, 0, 24, ctx)
-  const { startDate } = ctx.cfg
-  let date = Temporal.PlainDate.from({
-    year: startDate.year,
-    month: Math.floor((startDate.month - 1) / 3) * 3 + 1,
-    day: 1
-  })
-  while (Temporal.PlainDate.compare(date, ctx.cfg.endDate) < 0) {
-    const q = Math.floor((date.month - 1) / 3) + 1
-    const nextQStart = date.add({ months: 3 })
-    const x1 = Math.max(0, dateToX(ctx.cfg, date))
-    const x2 = Math.min(ctx.cfg.totalWidth, dateToX(ctx.cfg, nextQStart))
+  // Top tier: month bands.
+  renderMonthBands(g, 0, 24, ctx)
+  // Bottom tier: tick + date number every Monday.
+  const { startDate, totalDays, dayWidth } = ctx.cfg
+  for (let i = 0; i < totalDays; i++) {
+    const d = startDate.add({ days: i })
+    if (d.dayOfWeek !== 1) continue
+    const x = i * dayWidth
+    g.appendChild(
+      svgEl('line', {
+        x1: x,
+        y1: 24,
+        x2: x,
+        y2: HEADER_HEIGHT,
+        class: 'pm-gantt-header-tick'
+      })
+    )
     const text = svgEl('text', {
-      x: x1 + (x2 - x1) / 2,
-      y: 44,
-      class: 'pm-gantt-header-quarter'
+      x: x + 3,
+      y: 42,
+      class: 'pm-gantt-header-day-small'
     })
-    text.textContent = `Q${q} ${date.year}`
+    text.textContent = String(d.day)
     g.appendChild(text)
-    date = nextQStart
   }
 }
 

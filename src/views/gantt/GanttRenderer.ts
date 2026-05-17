@@ -50,12 +50,15 @@ export function renderGridLines(ctx: RendererContext, totalRows: number): void {
       )
     }
 
+    // Grid lines: stronger lines at the major boundary, lighter at the minor.
+    // We keep a single class for now; the line frequency reflects the period
+    // the granularity is meant to scope to.
     const shouldDrawLine =
-      (granularity === 'day' && isMonday) ||
+      (granularity === 'day' && (isMonday || isFirst)) ||
       (granularity === 'week' && isMonday) ||
-      (granularity === 'month' && isFirst) ||
-      (granularity === 'quarter' && isFirst && (d.month - 1) % 3 === 0) ||
-      (granularity === 'year' && isFirst && d.month === 1)
+      (granularity === 'month' && (isMonday || isFirst)) ||
+      (granularity === 'quarter' && isFirst) ||
+      (granularity === 'year' && isFirst)
 
     if (shouldDrawLine) {
       g.appendChild(

@@ -8,12 +8,18 @@ export const LABEL_WIDTH = 280
 export const BAR_PADDING = 8
 export const BAR_BORDER_RADIUS = 7
 
+// Notion-style: granularity = "what fits a typical screen-width" (~1500px).
+// day:    ~25 days visible        (60 * 25 = 1500)
+// week:   ~7 days visible         (215 * 7 = 1505)
+// month:  ~30 days visible        (50 * 30 = 1500)
+// quarter:~180 days visible       (8 * 180 = 1440 → ~6 months)
+// year:   ~365 days visible       (4 * 365 = 1460 → 1 year)
 export const DAY_WIDTH: Record<GanttGranularity, number> = {
-  day: 44,
-  week: 22,
-  month: 9,
-  quarter: 5,
-  year: 2
+  day: 60,
+  week: 215,
+  month: 50,
+  quarter: 9,
+  year: 4
 }
 
 export interface TimelineCfg {
@@ -25,12 +31,13 @@ export interface TimelineCfg {
   totalWidth: number
 }
 
+// Minimum visible range — enforces a sensible "fit" for the granularity.
 const MIN_DAYS: Record<GanttGranularity, number> = {
-  day: 30,
-  week: 90,
-  month: 365,
-  quarter: 365,
-  year: 730
+  day: 21,
+  week: 14,
+  month: 30,
+  quarter: 180,
+  year: 365
 }
 
 export function buildTimelineConfig(tasks: Task[], granularity: GanttGranularity): TimelineCfg {
@@ -104,17 +111,14 @@ export function getSnapPoints(cfg: TimelineCfg): number[] {
     const d = startDate.add({ days: i })
     const x = i * dayWidth
 
-    if (granularity === 'day') {
+    if (granularity === 'day' || granularity === 'week') {
       points.push(x)
-    } else if (granularity === 'week') {
-      // Temporal dayOfWeek: Mon=1..Sun=7
-      if (d.dayOfWeek === 1 || d.dayOfWeek === 4) points.push(x)
     } else if (granularity === 'month') {
-      if (d.day === 1 || d.day === 8 || d.day === 15 || d.day === 22) points.push(x)
-    } else if (granularity === 'quarter') {
+      // Snap to every Monday (week boundary) for finer control at month zoom.
+      if (d.day === 1 || d.dayOfWeek === 1) points.push(x)
+    } else if (granularity === 'quarter' || granularity === 'year') {
+      // Snap to 1st of each month.
       if (d.day === 1) points.push(x)
-    } else if (granularity === 'year') {
-      if (d.day === 1 && d.month === 1) points.push(x)
     }
   }
   return points

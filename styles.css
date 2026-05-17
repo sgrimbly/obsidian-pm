@@ -749,6 +749,7 @@
 }
 .pm-gantt-header-year { font-size: 11px; fill: var(--text-muted); font-weight: 600; }
 .pm-gantt-header-day  { font-size: 10px; fill: var(--text-muted); text-anchor: middle; dominant-baseline: central; }
+.pm-gantt-header-day-small { font-size: 9px; fill: var(--text-muted); text-anchor: start; dominant-baseline: central; }
 .pm-gantt-header-week { font-size: 10px; fill: var(--text-muted); text-anchor: middle; dominant-baseline: central; font-weight: 600; }
 .pm-gantt-header-month { font-size: 11px; fill: var(--text-normal); text-anchor: middle; dominant-baseline: central; font-weight: 600; }
 .pm-gantt-header-quarter { font-size: 12px; fill: var(--text-normal); text-anchor: middle; dominant-baseline: central; font-weight: 700; }
