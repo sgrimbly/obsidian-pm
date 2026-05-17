@@ -12,7 +12,8 @@ export const DAY_WIDTH: Record<GanttGranularity, number> = {
   day: 44,
   week: 22,
   month: 9,
-  quarter: 5
+  quarter: 5,
+  year: 2
 }
 
 export interface TimelineCfg {
@@ -28,7 +29,8 @@ const MIN_DAYS: Record<GanttGranularity, number> = {
   day: 30,
   week: 90,
   month: 365,
-  quarter: 365
+  quarter: 365,
+  year: 730
 }
 
 export function buildTimelineConfig(tasks: Task[], granularity: GanttGranularity): TimelineCfg {
@@ -63,6 +65,8 @@ export function buildTimelineConfig(tasks: Task[], granularity: GanttGranularity
   // Snap to month start for cleaner headers
   if (granularity === 'week' || granularity === 'month' || granularity === 'quarter') {
     startDate = startDate.with({ day: 1 })
+  } else if (granularity === 'year') {
+    startDate = startDate.with({ month: 1, day: 1 })
   }
 
   const dayWidth = DAY_WIDTH[granularity]
@@ -109,6 +113,8 @@ export function getSnapPoints(cfg: TimelineCfg): number[] {
       if (d.day === 1 || d.day === 8 || d.day === 15 || d.day === 22) points.push(x)
     } else if (granularity === 'quarter') {
       if (d.day === 1) points.push(x)
+    } else if (granularity === 'year') {
+      if (d.day === 1 && d.month === 1) points.push(x)
     }
   }
   return points

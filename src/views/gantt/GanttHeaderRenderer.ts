@@ -43,9 +43,29 @@ export function renderTimelineHeader(ctx: RendererContext): void {
   if (granularity === 'day') renderDayHeader(g, ctx)
   else if (granularity === 'week') renderWeekHeader(g, ctx)
   else if (granularity === 'month') renderMonthHeader(g, ctx)
-  else renderQuarterHeader(g, ctx)
+  else if (granularity === 'quarter') renderQuarterHeader(g, ctx)
+  else renderYearHeader(g, ctx)
 
   ctx.svgEl.appendChild(g)
+}
+
+function renderYearHeader(g: SVGGElement, ctx: RendererContext): void {
+  renderYearBands(g, 0, 24, ctx)
+  const { startDate } = ctx.cfg
+  let date = Temporal.PlainDate.from({ year: startDate.year, month: 1, day: 1 })
+  while (Temporal.PlainDate.compare(date, ctx.cfg.endDate) < 0) {
+    const nextYearStart = date.add({ years: 1 })
+    const x1 = Math.max(0, dateToX(ctx.cfg, date))
+    const x2 = Math.min(ctx.cfg.totalWidth, dateToX(ctx.cfg, nextYearStart))
+    const text = svgEl('text', {
+      x: x1 + (x2 - x1) / 2,
+      y: 44,
+      class: 'pm-gantt-header-quarter'
+    })
+    text.textContent = String(date.year)
+    g.appendChild(text)
+    date = nextYearStart
+  }
 }
 
 function renderDayHeader(g: SVGGElement, ctx: RendererContext): void {

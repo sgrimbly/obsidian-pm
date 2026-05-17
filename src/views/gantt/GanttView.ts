@@ -85,8 +85,8 @@ export class GanttView implements SubView {
 
   private renderGranularityControls(): void {
     const bar = this.container.createDiv('pm-gantt-controls')
-    const levels: GanttGranularity[] = ['day', 'week', 'month', 'quarter']
-    const labels: Record<GanttGranularity, string> = { day: 'Day', week: 'Week', month: 'Month', quarter: 'Quarter' }
+    const levels: GanttGranularity[] = ['day', 'week', 'month', 'quarter', 'year']
+    const labels: Record<GanttGranularity, string> = { day: 'Day', week: 'Week', month: 'Month', quarter: 'Quarter', year: 'Year' }
 
     for (const level of levels) {
       const btn = bar.createEl('button', { text: labels[level], cls: 'pm-gantt-zoom-btn' })
