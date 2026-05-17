@@ -143,6 +143,21 @@ export function renderTaskBar(g: SVGGElement, task: Task, row: number, _depth: n
       class: 'pm-gantt-bar-label-overflow'
     })
     label.textContent = task.title
+    // Make the overflow label itself a click target — useful for
+    // single-day tasks at year/quarter zoom where the bar is just a
+    // few pixels wide.
+    label.style.cursor = 'pointer'
+    label.style.pointerEvents = 'auto'
+    label.addEventListener('click', (e: MouseEvent) => {
+      e.stopPropagation()
+      openTaskModal(ctx.plugin, ctx.project, {
+        task,
+        onSave: async (updated) => {
+          await ctx.plugin.store.updateTask(ctx.project, task.id, updated)
+          await ctx.onRefresh()
+        }
+      })
+    })
     barGroup.appendChild(label)
   }
 
@@ -152,36 +167,41 @@ export function renderTaskBar(g: SVGGElement, task: Task, row: number, _depth: n
   ttEl.textContent = `${task.title}\n${statusConfig?.label ?? task.status} \u00b7 ${task.priority}\nStart: ${task.start || '\u2014'}  Due: ${task.due || '\u2014'}\nProgress: ${task.progress}%${assigneesStr}`
   rect.appendChild(ttEl)
 
-  // Drag handles
+  // Drag handles — only when the bar is wide enough to leave a clickable
+  // middle. At narrow widths (≤ 2 * HANDLE_W) both handles overlap and
+  // consume the entire bar, leaving no click target to open the task.
   const HANDLE_W = 8
-  for (const side of ['left', 'right'] as const) {
-    const hx = side === 'left' ? x : x + width - HANDLE_W
-    const handle = svgEl('rect', {
-      x: hx,
-      y,
-      width: HANDLE_W,
-      height,
-      rx: 3,
-      ry: 3,
-      class: 'pm-gantt-drag-handle',
-      cursor: 'ew-resize'
-    })
-    const cleanup = attachDragHandle(
-      handle,
-      side,
-      task,
-      rect,
-      barGroup,
-      x,
-      width,
-      ctx.cfg,
-      ctx.drag,
-      ctx.plugin,
-      ctx.project,
-      ctx.onRefresh
-    )
-    ctx.cleanupFns.push(cleanup)
-    barGroup.appendChild(handle)
+  const MIN_BAR_FOR_HANDLES = HANDLE_W * 2 + 4 // 20px
+  if (width >= MIN_BAR_FOR_HANDLES) {
+    for (const side of ['left', 'right'] as const) {
+      const hx = side === 'left' ? x : x + width - HANDLE_W
+      const handle = svgEl('rect', {
+        x: hx,
+        y,
+        width: HANDLE_W,
+        height,
+        rx: 3,
+        ry: 3,
+        class: 'pm-gantt-drag-handle',
+        cursor: 'ew-resize'
+      })
+      const cleanup = attachDragHandle(
+        handle,
+        side,
+        task,
+        rect,
+        barGroup,
+        x,
+        width,
+        ctx.cfg,
+        ctx.drag,
+        ctx.plugin,
+        ctx.project,
+        ctx.onRefresh
+      )
+      ctx.cleanupFns.push(cleanup)
+      barGroup.appendChild(handle)
+    }
   }
 
   // Link dots (dependency connectors) — positioned outside bar edges
