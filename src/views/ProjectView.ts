@@ -1,4 +1,4 @@
-import { ButtonComponent, ExtraButtonComponent, ItemView, WorkspaceLeaf, TFile, EventRef } from 'obsidian'
+import { ButtonComponent, ExtraButtonComponent, ItemView, Notice, WorkspaceLeaf, TFile, EventRef } from 'obsidian'
 import type PMPlugin from '../main'
 import { Project, ViewMode, FilterState, SavedView, makeDefaultFilter, makeId } from '../types'
 import { truncateTitle, safeAsync } from '../utils'
