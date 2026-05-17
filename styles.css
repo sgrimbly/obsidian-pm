@@ -790,6 +790,17 @@
   dominant-baseline: central;
 }
 
+/* Notion-style label overflow: when the bar is too narrow to fit the title,
+   the full title is rendered to the right of the bar in theme text colour. */
+.pm-gantt-bar-label-overflow {
+  font-size: 11px;
+  fill: var(--text-normal);
+  font-weight: 500;
+  pointer-events: none;
+  dominant-baseline: central;
+  white-space: pre;
+}
+
 /* Today line */
 .pm-gantt-today-line {
   stroke: rgba(196,112,112,0.65);

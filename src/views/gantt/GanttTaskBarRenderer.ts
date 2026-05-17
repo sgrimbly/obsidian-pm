@@ -122,15 +122,27 @@ export function renderTaskBar(g: SVGGElement, task: Task, row: number, _depth: n
     barGroup.appendChild(icon)
   }
 
-  // Label inside bar
-  if (width > 55) {
+  // Label \u2014 render inside the bar when it fits, overflow to the right when it doesn't.
+  // This matches Notion's timeline behaviour: narrow bars still show their full title
+  // to the right of the bar in theme text colour.
+  const CHAR_WIDTH = 7.5
+  const estTextWidth = task.title.length * CHAR_WIDTH
+  const fitsInside = width >= estTextWidth + 16
+  if (fitsInside) {
     const label = svgEl('text', {
       x: x + 8,
       y: y + height / 2 + 5,
       class: 'pm-gantt-bar-label'
     })
-    const maxChars = Math.max(4, Math.floor((width - 16) / 7.5))
-    label.textContent = task.title.length > maxChars ? task.title.slice(0, maxChars - 1) + '\u2026' : task.title
+    label.textContent = task.title
+    barGroup.appendChild(label)
+  } else {
+    const label = svgEl('text', {
+      x: x + width + 6,
+      y: y + height / 2 + 5,
+      class: 'pm-gantt-bar-label-overflow'
+    })
+    label.textContent = task.title
     barGroup.appendChild(label)
   }
 
