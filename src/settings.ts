@@ -41,6 +41,7 @@ export class PMSettingTab extends PluginSettingTab {
           .addOption('table', 'Table')
           .addOption('gantt', 'Gantt')
           .addOption('kanban', 'Board')
+          .addOption('calendar', 'Calendar')
           .setValue(this.plugin.settings.defaultView)
           .onChange(async (v) => {
             this.plugin.settings.defaultView = v as PMSettings['defaultView']

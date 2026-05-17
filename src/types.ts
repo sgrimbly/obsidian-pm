@@ -5,7 +5,7 @@ export type TaskStatus = string
 export type TaskPriority = 'critical' | 'high' | 'medium' | 'low'
 export type GanttGranularity = 'day' | 'week' | 'month' | 'quarter' | 'year'
 export type GanttWeekLabel = 'weekNumber' | 'dateRange' | 'both'
-export type ViewMode = 'table' | 'gantt' | 'kanban'
+export type ViewMode = 'table' | 'gantt' | 'kanban' | 'calendar'
 export type DueDateFilter = 'any' | 'overdue' | 'this-week' | 'this-month' | 'no-date'
 export type TaskType = 'task' | 'milestone' | 'subtask'
 

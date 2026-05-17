@@ -1965,3 +1965,96 @@ body.pm-resize-active, body.pm-resize-active * { cursor: col-resize !important; 
   color: var(--text-normal, #2b3438);
 }
 
+
+/* ─── Calendar view ────────────────────────────────────────────────── */
+.pm-calendar-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+.pm-calendar-toolbar {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+}
+.pm-calendar-month-label {
+  font-weight: 600;
+  font-size: 14px;
+  margin-left: 12px;
+  color: var(--text-normal);
+}
+.pm-calendar-grid {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+.pm-calendar-dow-row {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  background: var(--background-secondary);
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+.pm-calendar-dow {
+  padding: 8px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.pm-calendar-week-row {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  flex: 1;
+  min-height: 110px;
+}
+.pm-calendar-cell {
+  border-right: 1px solid var(--background-modifier-border);
+  border-bottom: 1px solid var(--background-modifier-border);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 110px;
+  overflow: hidden;
+}
+.pm-calendar-cell-other { background: var(--background-primary-alt); opacity: 0.55; }
+.pm-calendar-cell-weekend { background: var(--background-secondary-alt); }
+.pm-calendar-cell-today { box-shadow: inset 0 0 0 2px var(--interactive-accent); }
+.pm-calendar-cell--drop-target { background: var(--background-modifier-hover); }
+.pm-calendar-cell-head { display: flex; justify-content: flex-end; }
+.pm-calendar-date {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  line-height: 1;
+}
+.pm-calendar-cell-today .pm-calendar-date {
+  color: var(--interactive-accent);
+  font-weight: 700;
+}
+.pm-calendar-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+}
+.pm-calendar-chip {
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: white;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: grab;
+  opacity: 0.9;
+}
+.pm-calendar-chip:hover { opacity: 1; }
+.pm-calendar-chip--dragging { opacity: 0.4; }
