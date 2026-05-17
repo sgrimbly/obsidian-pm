@@ -225,6 +225,25 @@ export class GanttView implements SubView {
     leftPanel.addEventListener('wheel', onLeftWheel, { passive: false })
     this.cleanupFns.push(() => leftPanel.removeEventListener('wheel', onLeftWheel))
 
+    // Also intercept wheel on the right panel so horizontal trackpad gestures
+    // (and Shift+wheel) reliably scroll the timeline. Without this, when the
+    // left panel is hidden some platforms route the gesture to higher-level
+    // handlers (e.g. Obsidian's pane-swipe navigation) instead of letting
+    // the browser scroll the rightPanel natively.
+    const onRightWheel = (e: WheelEvent) => {
+      // Native vertical scroll is already handled by browser; we only need
+      // to assert ownership of horizontal deltas + Shift+wheel.
+      if (e.deltaX !== 0) {
+        rightPanel.scrollLeft += e.deltaX
+        e.preventDefault()
+      } else if (e.shiftKey && e.deltaY !== 0) {
+        rightPanel.scrollLeft += e.deltaY
+        e.preventDefault()
+      }
+    }
+    rightPanel.addEventListener('wheel', onRightWheel, { passive: false })
+    this.cleanupFns.push(() => rightPanel.removeEventListener('wheel', onRightWheel))
+
     // Add task button
     const addRow = leftBody.createDiv('pm-gantt-label-row pm-gantt-add-row')
     addRow.style.height = `${ROW_HEIGHT}px`
