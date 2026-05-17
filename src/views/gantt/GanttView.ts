@@ -33,9 +33,10 @@ export class GanttView implements SubView {
   private drag: DragState = makeDragState()
   private link: LinkState = makeLinkState()
   private labelWidth: number = LABEL_WIDTH
+  private labelPanelHidden: boolean = false
 
   getLabelWidth(): number {
-    return this.labelWidth
+    return this.labelPanelHidden ? 0 : this.labelWidth
   }
   setLabelWidth(w: number): void {
     this.labelWidth = w
@@ -104,22 +105,35 @@ export class GanttView implements SubView {
 
     new ButtonComponent(bar).setButtonText('Expand all').onClick(() => this.setAllCollapsed(false))
     new ButtonComponent(bar).setButtonText('Collapse all').onClick(() => this.setAllCollapsed(true))
+
+    bar.createEl('span', { cls: 'pm-gantt-sep' })
+    new ButtonComponent(bar)
+      .setButtonText(this.labelPanelHidden ? 'Show table' : 'Hide table')
+      .onClick(() => {
+        this.labelPanelHidden = !this.labelPanelHidden
+        this.render()
+      })
   }
 
   private renderGantt(): void {
     const wrapper = this.container.createDiv('pm-gantt-wrapper')
 
-    // Left panel: task labels
+    // Left panel: task labels (hidden when labelPanelHidden is true)
     const leftPanel = wrapper.createDiv('pm-gantt-left')
-    leftPanel.style.width = `${this.labelWidth}px`
-    leftPanel.style.minWidth = `${this.labelWidth}px`
+    if (this.labelPanelHidden) {
+      leftPanel.style.display = 'none'
+    } else {
+      leftPanel.style.width = `${this.labelWidth}px`
+      leftPanel.style.minWidth = `${this.labelWidth}px`
+    }
     const leftHeader = leftPanel.createDiv('pm-gantt-left-header')
     leftHeader.style.height = `${HEADER_HEIGHT}px`
     leftHeader.createEl('span', { text: 'Task', cls: 'pm-gantt-left-header-label' })
     const leftBody = leftPanel.createDiv('pm-gantt-left-body')
 
-    // Resize handle
+    // Resize handle (hidden when label panel is collapsed)
     const resizeHandle = wrapper.createDiv('pm-gantt-resize-handle')
+    if (this.labelPanelHidden) resizeHandle.style.display = 'none'
     let resizing = false
     let startX = 0
     let startWidth = 0
