@@ -725,6 +725,10 @@
 /* Right panel: scrollable SVG */
 .pm-gantt-right {
   flex: 1;
+  /* Allow the flex item to shrink below intrinsic content width so the
+     svg-container overflows it and triggers the horizontal scrollbar.
+     Without min-width:0, content-sized flex items don't shrink. */
+  min-width: 0;
   overflow: auto;
   position: relative;
 }
