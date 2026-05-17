@@ -2058,3 +2058,21 @@ body.pm-resize-active, body.pm-resize-active * { cursor: col-resize !important; 
 }
 .pm-calendar-chip:hover { opacity: 1; }
 .pm-calendar-chip--dragging { opacity: 0.4; }
+
+/* ─── Project header search ────────────────────────────────────────── */
+.pm-project-header-search-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.pm-project-header-search-vault-btn {
+  padding: 4px 6px;
+  background: transparent;
+  border: 1px solid var(--background-modifier-border);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.pm-project-header-search-vault-btn:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}

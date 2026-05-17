@@ -191,7 +191,8 @@ export class ProjectView extends ItemView {
       onSavedViewSelect: (id) => this.handleSavedViewSelect(id),
       onSavedViewSave: (name) => this.handleSavedViewSave(name),
       onSavedViewUpdate: (id) => this.handleSavedViewUpdate(id),
-      onSavedViewDelete: (id) => this.handleSavedViewDelete(id)
+      onSavedViewDelete: (id) => this.handleSavedViewDelete(id),
+      onSearchInVault: () => this.handleSearchInVault()
     })
   }
 
@@ -204,6 +205,28 @@ export class ProjectView extends ItemView {
     }
     void this.persistFilter()
     this.refreshSubview()
+  }
+
+  private handleSearchInVault(): void {
+    // Hand off the current filter text to Obsidian's global-search internal
+    // plugin, scoped to this project's task folder. Result: full Obsidian
+    // search semantics (operators, fuzzy, content) over just this project.
+    if (!this.filePath) return
+    const taskFolder = this.filePath.replace(/\.md$/, '_tasks')
+    const userQuery = this.filter.text.trim()
+    // path: limits to files under the task folder. Quoting handles spaces.
+    const scoped = `path:"${taskFolder}/" ${userQuery}`.trim()
+    type GlobalSearchInstance = { openGlobalSearch: (query: string) => void }
+    type AppWithInternal = typeof this.plugin.app & {
+      internalPlugins?: { plugins?: Record<string, { instance?: GlobalSearchInstance }> }
+    }
+    const app = this.plugin.app as AppWithInternal
+    const search = app.internalPlugins?.plugins?.['global-search']?.instance
+    if (search) {
+      search.openGlobalSearch(scoped)
+    } else {
+      new Notice('Could not open global search')
+    }
   }
 
   private handleClearFilter(): void {

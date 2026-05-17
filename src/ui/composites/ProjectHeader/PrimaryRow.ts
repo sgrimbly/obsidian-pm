@@ -10,6 +10,7 @@ export interface PrimaryRowProps {
   activeSavedViewId: string | null
   filterRowExpanded: boolean
   onSearchChange: () => void
+  onSearchInVault: () => void
   onSavedViewSelect: (id: string | null) => void
   onSavedViewSave: (name: string) => Promise<void>
   onSavedViewUpdate: (id: string) => Promise<void>
@@ -49,7 +50,8 @@ export class PrimaryRow {
   }
 
   private renderSearchInput(): void {
-    const input = this.el.createEl('input', {
+    const wrap = this.el.createDiv('pm-project-header-search-wrap')
+    const input = wrap.createEl('input', {
       type: 'text',
       placeholder: 'Search tasks…',
       cls: 'pm-project-header-search'
@@ -59,6 +61,19 @@ export class PrimaryRow {
       this.props.filter.text = input.value
       this.props.onSearchChange()
     })
+    // Bridge to Obsidian's global search, scoped to this project's task folder.
+    // Press Enter in the input OR click the button to hand off.
+    input.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (e.key === 'Enter' && e.shiftKey) {
+        e.preventDefault()
+        this.props.onSearchInVault()
+      }
+    })
+    const btn = new ButtonComponent(wrap)
+    btn.setIcon('search')
+      .setTooltip('Search in vault (Shift+Enter)')
+      .onClick(() => this.props.onSearchInVault())
+    btn.buttonEl.addClass('pm-project-header-search-vault-btn')
   }
 
   private renderSavedViewPills(parent: HTMLElement): void {

@@ -15,6 +15,7 @@ export interface ProjectHeaderProps {
   onSavedViewSave: (name: string) => Promise<void>
   onSavedViewUpdate: (id: string) => Promise<void>
   onSavedViewDelete: (id: string) => Promise<void>
+  onSearchInVault: () => void
 }
 
 export class ProjectHeader {
@@ -56,6 +57,7 @@ export class ProjectHeader {
       activeSavedViewId: this.props.activeSavedViewId,
       filterRowExpanded: this.filterRowExpanded,
       onSearchChange: this.props.onFilterChange,
+      onSearchInVault: this.props.onSearchInVault,
       onSavedViewSelect: this.props.onSavedViewSelect,
       onSavedViewSave: this.props.onSavedViewSave,
       onSavedViewUpdate: this.props.onSavedViewUpdate,
