@@ -386,6 +386,21 @@ export class TaskModal extends Modal {
         )
     }
 
+    // "Open as note" button — also surfaced in the header as an icon, but
+    // many users miss the icon. This is the more discoverable labelled copy.
+    if (!this.isNew && this.task.filePath) {
+      const filePath = this.task.filePath
+      new ButtonComponent(footer)
+        .setButtonText('Open as note')
+        .setIcon('file-text')
+        .onClick(() => {
+          this.saved = false
+          this.cancelled = false
+          this.close()
+          void this.app.workspace.openLinkText(filePath, '', true)
+        })
+    }
+
     footer.createDiv('pm-footer-spacer')
 
     new ButtonComponent(footer).setButtonText('Cancel').onClick(() => {
