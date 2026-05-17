@@ -2080,3 +2080,35 @@ body.pm-resize-active, body.pm-resize-active * { cursor: col-resize !important; 
   background: var(--background-modifier-hover);
   color: var(--text-normal);
 }
+
+/* Hide-table chevron on the task-list header. */
+.pm-gantt-left-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.pm-gantt-collapse-btn,
+.pm-gantt-expand-btn-floating {
+  appearance: none;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 3px;
+}
+.pm-gantt-collapse-btn:hover,
+.pm-gantt-expand-btn-floating:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+.pm-gantt-expand-btn-floating {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 5;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+}

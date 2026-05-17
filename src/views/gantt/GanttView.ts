@@ -105,14 +105,11 @@ export class GanttView implements SubView {
 
     new ButtonComponent(bar).setButtonText('Expand all').onClick(() => this.setAllCollapsed(false))
     new ButtonComponent(bar).setButtonText('Collapse all').onClick(() => this.setAllCollapsed(true))
+  }
 
-    bar.createEl('span', { cls: 'pm-gantt-sep' })
-    new ButtonComponent(bar)
-      .setButtonText(this.labelPanelHidden ? 'Show table' : 'Hide table')
-      .onClick(() => {
-        this.labelPanelHidden = !this.labelPanelHidden
-        this.render()
-      })
+  private toggleLabelPanel(): void {
+    this.labelPanelHidden = !this.labelPanelHidden
+    this.render()
   }
 
   private renderGantt(): void {
@@ -129,6 +126,13 @@ export class GanttView implements SubView {
     const leftHeader = leftPanel.createDiv('pm-gantt-left-header')
     leftHeader.style.height = `${HEADER_HEIGHT}px`
     leftHeader.createEl('span', { text: 'Task', cls: 'pm-gantt-left-header-label' })
+    // Collapse chevron at the right edge of the task-list header (Notion-style).
+    const collapseBtn = leftHeader.createEl('button', {
+      cls: 'pm-gantt-collapse-btn',
+      attr: { 'aria-label': 'Hide table', title: 'Hide table' }
+    })
+    collapseBtn.textContent = '«' // « (double left-angle)
+    collapseBtn.addEventListener('click', () => this.toggleLabelPanel())
     const leftBody = leftPanel.createDiv('pm-gantt-left-body')
 
     // Resize handle (hidden when label panel is collapsed)
@@ -166,6 +170,16 @@ export class GanttView implements SubView {
     // Right panel: timeline
     const rightPanel = wrapper.createDiv('pm-gantt-right')
     this.scrollEl = rightPanel
+    // When the label panel is hidden, show a small expand chevron pinned to
+    // the top-left of the timeline so the user can bring the table back.
+    if (this.labelPanelHidden) {
+      const expandBtn = rightPanel.createEl('button', {
+        cls: 'pm-gantt-expand-btn-floating',
+        attr: { 'aria-label': 'Show table', title: 'Show table' }
+      })
+      expandBtn.textContent = '»' // » (double right-angle)
+      expandBtn.addEventListener('click', () => this.toggleLabelPanel())
+    }
     const svgContainer = this.scrollEl.createDiv('pm-gantt-svg-container')
     svgContainer.style.width = `${this.cfg.totalWidth}px`
 
