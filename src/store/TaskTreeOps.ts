@@ -1,4 +1,4 @@
-import type { Task } from '../types'
+import type { GanttSortMode, Task } from '../types'
 import { makeId } from '../types'
 
 /** Flatten a task tree into a list, preserving depth info */
@@ -168,4 +168,47 @@ export function collectAllTags(tasks: Task[]): string[] {
 export function totalLoggedHours(task: Task): number {
   if (!task.timeLogs?.length) return 0
   return task.timeLogs.reduce((sum, log) => sum + log.hours, 0)
+}
+
+/**
+ * Return a copy of a task tree sorted by `start` or `due` date according to
+ * `mode`. Each level is sorted independently — siblings sort among themselves,
+ * the parent–child grouping is preserved. The original `tasks` array is never
+ * mutated.
+ *
+ * Rules:
+ *   - `mode === 'natural'` is a pass-through (returns the input by reference).
+ *   - Tasks without the sort key (empty `start` / `due`) sink to the end of
+ *     their group.
+ *   - On a tie (same date), milestones come first. This keeps milestone
+ *     diamonds visually above their dependent bars when both share a start
+ *     date (e.g. notification milestone + camera-ready task at the same date).
+ *   - Secondary tie-break is original position (stable sort), so unrelated
+ *     ties don't reshuffle.
+ */
+export function sortTaskTree(tasks: Task[], mode: GanttSortMode): Task[] {
+  if (mode === 'natural') return tasks
+
+  const keyFn: (t: Task) => string = mode.startsWith('start') ? (t) => t.start : (t) => t.due
+  const dir = mode.endsWith('-asc') ? 1 : -1
+
+  const indexed = tasks.map((task, originalIndex) => ({ task, originalIndex }))
+  indexed.sort((a, b) => {
+    const aDate = keyFn(a.task) || ''
+    const bDate = keyFn(b.task) || ''
+    // Tasks without the sort-key date sink to the end regardless of direction
+    if (!aDate && !bDate) return a.originalIndex - b.originalIndex
+    if (!aDate) return 1
+    if (!bDate) return -1
+    if (aDate === bDate) {
+      if (a.task.type === 'milestone' && b.task.type !== 'milestone') return -1
+      if (b.task.type === 'milestone' && a.task.type !== 'milestone') return 1
+      return a.originalIndex - b.originalIndex
+    }
+    return dir * (aDate < bDate ? -1 : 1)
+  })
+
+  return indexed.map(({ task }) =>
+    task.subtasks.length ? { ...task, subtasks: sortTaskTree(task.subtasks, mode) } : task
+  )
 }
