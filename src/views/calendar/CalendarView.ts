@@ -12,13 +12,16 @@ import { openTaskModal } from '../../ui/ModalFactory'
 /**
  * Calendar (month-grid) view.
  *
- * - 6-row × 7-column grid of dates (always shows the full month plus
- *   the surrounding-week padding).
- * - Each cell shows a date number plus a list of "chips" for tasks
- *   whose [start, due] range covers that date.
- * - Chips are draggable: dropping a chip on a different date shifts
- *   the task's start/due by the offset between the source and target
- *   date, preserving duration.
+ * - 6-row × 7-column grid of dates (always shows the full month plus the
+ *   surrounding-week padding).
+ * - Each task whose [start, due] range covers part of a week renders as a
+ *   single **continuous bar** spanning those columns. Multi-week tasks
+ *   produce one bar segment per week, with continuation arrows on the
+ *   wrapping edges. Within a week, segments are lane-packed so they don't
+ *   visually overlap.
+ * - Dragging a bar to a different cell shifts the task's start/due by the
+ *   offset between the task's anchor (`start` if set, else `due`) and the
+ *   drop cell, preserving duration.
  */
 export class CalendarView implements SubView {
   private currentMonth: { year: number; month: number }
@@ -107,18 +110,26 @@ export class CalendarView implements SubView {
     const t = today()
 
     for (let week = 0; week < 6; week++) {
+      const weekStart = gridStart.add({ days: week * 7 })
+      const weekEnd = gridStart.add({ days: week * 7 + 6 })
       const weekRow = grid.createDiv('pm-calendar-week-row')
+
+      // Backdrop cells (date numbers + drop targets + today/weekend marks).
       for (let d = 0; d < 7; d++) {
-        const date = gridStart.add({ days: week * 7 + d })
-        this.renderCell(weekRow, date, flatTasks, t)
+        const date = weekStart.add({ days: d })
+        this.renderCell(weekRow, date, t)
       }
+
+      // Continuous bars overlay — one bar per (task, week-segment), spanning
+      // the columns the task covers within this week. Lane-packed to avoid
+      // visual overlap.
+      this.renderWeekBars(weekRow, weekStart, weekEnd, flatTasks)
     }
   }
 
   private renderCell(
     row: HTMLElement,
     date: Temporal.PlainDate,
-    tasks: Task[],
     nowDate: Temporal.PlainDate
   ): void {
     const cell = row.createDiv('pm-calendar-cell')
@@ -129,14 +140,8 @@ export class CalendarView implements SubView {
     const head = cell.createDiv('pm-calendar-cell-head')
     head.createSpan({ cls: 'pm-calendar-date', text: String(date.day) })
 
-    const chipBox = cell.createDiv('pm-calendar-chips')
-
-    // Tasks covering this date.
-    for (const task of tasks) {
-      if (taskCoversDate(task, date)) this.renderChip(chipBox, task, date)
-    }
-
-    // Allow dropping a chip onto this cell to reschedule.
+    // Drop target: receives bar drags, shifts the task by the offset between
+    // its anchor date (carried in the payload) and this cell's date.
     cell.addEventListener('dragover', (e: DragEvent) => {
       e.preventDefault()
       cell.addClass('pm-calendar-cell--drop-target')
@@ -175,24 +180,117 @@ export class CalendarView implements SubView {
     )
   }
 
-  private renderChip(container: HTMLElement, task: Task, cellDate: Temporal.PlainDate): void {
+  /**
+   * For a single week (Mon–Sun) compute the visible segment of every task
+   * whose [lo, hi] range intersects this week, lane-pack them to avoid
+   * vertical overlap, and render each as a single continuous bar.
+   */
+  private renderWeekBars(
+    weekRow: HTMLElement,
+    weekStart: Temporal.PlainDate,
+    weekEnd: Temporal.PlainDate,
+    tasks: Task[]
+  ): void {
+    interface Seg {
+      task: Task
+      lo: Temporal.PlainDate
+      hi: Temporal.PlainDate
+      startCol: number // 1..7
+      endCol: number // 2..8 (CSS grid end-line, exclusive)
+      continuesLeft: boolean
+      continuesRight: boolean
+    }
+
+    const segments: Seg[] = []
+    for (const task of tasks) {
+      const start = parsePlainDate(task.start)
+      const due = parsePlainDate(task.due)
+      if (!start && !due) continue
+      const lo = (start ?? due) as Temporal.PlainDate
+      const hi = (due ?? start) as Temporal.PlainDate
+      if (Temporal.PlainDate.compare(hi, weekStart) < 0) continue
+      if (Temporal.PlainDate.compare(lo, weekEnd) > 0) continue
+      const segLo = Temporal.PlainDate.compare(lo, weekStart) >= 0 ? lo : weekStart
+      const segHi = Temporal.PlainDate.compare(hi, weekEnd) <= 0 ? hi : weekEnd
+      const startCol = weekStart.until(segLo, { largestUnit: 'days' }).days + 1
+      const endCol = weekStart.until(segHi, { largestUnit: 'days' }).days + 2
+      segments.push({
+        task,
+        lo,
+        hi,
+        startCol,
+        endCol,
+        continuesLeft: Temporal.PlainDate.compare(lo, weekStart) < 0,
+        continuesRight: Temporal.PlainDate.compare(hi, weekEnd) > 0
+      })
+    }
+
+    if (segments.length === 0) return
+
+    // Lane pack — greedy by start column.
+    segments.sort((a, b) => a.startCol - b.startCol || a.task.title.localeCompare(b.task.title))
+    const laneEnds: number[] = [] // laneEnds[i] = first free column in lane i (exclusive)
+    const laneOf: number[] = []
+    for (const seg of segments) {
+      let lane = laneEnds.findIndex((end) => end <= seg.startCol)
+      if (lane === -1) {
+        lane = laneEnds.length
+        laneEnds.push(seg.endCol)
+      } else {
+        laneEnds[lane] = seg.endCol
+      }
+      laneOf.push(lane)
+    }
+
+    const overlay = weekRow.createDiv('pm-calendar-bars-overlay')
+    segments.forEach((seg, i) => {
+      this.renderBar(overlay, seg, laneOf[i])
+    })
+  }
+
+  private renderBar(
+    overlay: HTMLElement,
+    seg: {
+      task: Task
+      lo: Temporal.PlainDate
+      hi: Temporal.PlainDate
+      startCol: number
+      endCol: number
+      continuesLeft: boolean
+      continuesRight: boolean
+    },
+    lane: number
+  ): void {
+    const { task, lo, startCol, endCol, continuesLeft, continuesRight } = seg
     const status = getStatusConfig(this.plugin.settings.statuses, task.status)
     const color = status?.color ?? COLOR_ACCENT
-    const chip = container.createDiv('pm-calendar-chip')
-    chip.style.backgroundColor = color
-    chip.setText(task.title)
-    chip.title = `${task.title}\n${status?.label ?? task.status}\nStart: ${task.start || '—'}  Due: ${task.due || '—'}`
 
-    chip.draggable = true
-    chip.addEventListener('dragstart', (e: DragEvent) => {
-      const payload = JSON.stringify({ taskId: task.id, sourceDate: cellDate.toString() })
+    const bar = overlay.createDiv('pm-calendar-bar')
+    bar.style.gridColumn = `${startCol} / ${endCol}`
+    bar.style.gridRow = String(lane + 1)
+    bar.style.backgroundColor = color
+    if (continuesLeft) bar.addClass('pm-calendar-bar--continues-left')
+    if (continuesRight) bar.addClass('pm-calendar-bar--continues-right')
+    // Show the title only on the first visible segment (where the bar
+    // actually starts). Continuation segments stay blank so the eye reads
+    // the run as one task without label repetition.
+    if (!continuesLeft) bar.setText(task.title)
+
+    bar.title = `${task.title}\n${status?.label ?? task.status}\nStart: ${task.start || '—'}  Due: ${task.due || '—'}`
+
+    // Drag — anchor is the task's actual start (or due if no start), so
+    // dropping on a cell intuitively means "make this start on that day".
+    const anchor = parsePlainDate(task.start) ?? lo
+    bar.draggable = true
+    bar.addEventListener('dragstart', (e: DragEvent) => {
+      const payload = JSON.stringify({ taskId: task.id, sourceDate: anchor.toString() })
       e.dataTransfer?.setData('application/x-pm-task', payload)
       e.dataTransfer?.setData('text/plain', task.title)
-      chip.addClass('pm-calendar-chip--dragging')
+      bar.addClass('pm-calendar-bar--dragging')
     })
-    chip.addEventListener('dragend', () => chip.removeClass('pm-calendar-chip--dragging'))
+    bar.addEventListener('dragend', () => bar.removeClass('pm-calendar-bar--dragging'))
 
-    chip.addEventListener('click', (e: MouseEvent) => {
+    bar.addEventListener('click', (e: MouseEvent) => {
       e.stopPropagation()
       openTaskModal(this.plugin, this.project, {
         task,
@@ -203,13 +301,4 @@ export class CalendarView implements SubView {
       })
     })
   }
-}
-
-function taskCoversDate(task: Task, date: Temporal.PlainDate): boolean {
-  const start = parsePlainDate(task.start)
-  const due = parsePlainDate(task.due)
-  if (!start && !due) return false
-  const lo = start ?? due!
-  const hi = due ?? start!
-  return Temporal.PlainDate.compare(date, lo) >= 0 && Temporal.PlainDate.compare(date, hi) <= 0
 }

@@ -2016,6 +2016,7 @@ body.pm-resize-active, body.pm-resize-active * { cursor: col-resize !important; 
   grid-template-columns: repeat(7, 1fr);
   flex: 1;
   min-height: 110px;
+  position: relative; /* anchor for the bars overlay */
 }
 .pm-calendar-cell {
   border-right: 1px solid var(--background-modifier-border);
@@ -2042,14 +2043,25 @@ body.pm-resize-active, body.pm-resize-active * { cursor: col-resize !important; 
   color: var(--interactive-accent);
   font-weight: 700;
 }
-.pm-calendar-chips {
-  display: flex;
-  flex-direction: column;
+/* Continuous-bar overlay: positioned on top of each week-row's cells.
+   pointer-events:none on the wrapper so the grid cells underneath still
+   receive drag-drop; re-enabled on the bars themselves. */
+.pm-calendar-bars-overlay {
+  position: absolute;
+  top: 24px;      /* below the date-number row inside each cell */
+  left: 4px;
+  right: 4px;
+  bottom: 6px;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  grid-auto-rows: 20px;
   gap: 2px;
-  overflow: hidden;
+  pointer-events: none;
+  z-index: 2;
 }
-.pm-calendar-chip {
-  padding: 2px 6px;
+.pm-calendar-bar {
+  pointer-events: auto;
+  padding: 2px 8px;
   border-radius: 4px;
   color: white;
   font-size: 11px;
@@ -2058,10 +2070,38 @@ body.pm-resize-active, body.pm-resize-active * { cursor: col-resize !important; 
   overflow: hidden;
   text-overflow: ellipsis;
   cursor: grab;
-  opacity: 0.9;
+  opacity: 0.92;
+  display: flex;
+  align-items: center;
+  min-width: 0; /* allow shrinking below content size for ellipsis */
 }
-.pm-calendar-chip:hover { opacity: 1; }
-.pm-calendar-chip--dragging { opacity: 0.4; }
+.pm-calendar-bar:hover { opacity: 1; }
+.pm-calendar-bar--dragging { opacity: 0.4; }
+/* Continuation segments — flatten the relevant edge so adjacent week
+   segments look like one continuous bar across the week wrap. */
+.pm-calendar-bar--continues-left {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  padding-left: 4px;
+}
+.pm-calendar-bar--continues-left::before {
+  content: "‹";
+  margin-right: 4px;
+  opacity: 0.55;
+  font-weight: 700;
+}
+.pm-calendar-bar--continues-right {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  padding-right: 4px;
+}
+.pm-calendar-bar--continues-right::after {
+  content: "›";
+  margin-left: auto;
+  padding-left: 4px;
+  opacity: 0.55;
+  font-weight: 700;
+}
 
 /* ─── Project header search ────────────────────────────────────────── */
 .pm-project-header-search-wrap {
