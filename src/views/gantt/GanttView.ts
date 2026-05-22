@@ -141,12 +141,15 @@ export class GanttView implements SubView {
     let resizing = false
     let startX = 0
     let startWidth = 0
+    // Scope to the panel's own document so this works in inline embeds too
+    // (where the embed's host note may not be the active workspace leaf).
+    const resizeDoc = leftPanel.ownerDocument
     resizeHandle.addEventListener('mousedown', (e: MouseEvent) => {
       e.preventDefault()
       resizing = true
       startX = e.clientX
       startWidth = this.labelWidth
-      activeDocument.body.addClass('pm-resize-active')
+      resizeDoc.body.addClass('pm-resize-active')
     })
     const onMouseMove = (e: MouseEvent) => {
       if (!resizing) return
@@ -158,13 +161,13 @@ export class GanttView implements SubView {
     const onMouseUp = () => {
       if (!resizing) return
       resizing = false
-      activeDocument.body.removeClass('pm-resize-active')
+      resizeDoc.body.removeClass('pm-resize-active')
     }
-    activeDocument.addEventListener('mousemove', onMouseMove)
-    activeDocument.addEventListener('mouseup', onMouseUp)
+    resizeDoc.addEventListener('mousemove', onMouseMove)
+    resizeDoc.addEventListener('mouseup', onMouseUp)
     this.cleanupFns.push(() => {
-      activeDocument.removeEventListener('mousemove', onMouseMove)
-      activeDocument.removeEventListener('mouseup', onMouseUp)
+      resizeDoc.removeEventListener('mousemove', onMouseMove)
+      resizeDoc.removeEventListener('mouseup', onMouseUp)
     })
 
     // Right panel: timeline
