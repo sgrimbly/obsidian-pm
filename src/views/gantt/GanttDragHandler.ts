@@ -48,6 +48,12 @@ export function attachDragHandle(
   handle.addEventListener('mousedown', (e: MouseEvent) => {
     e.stopPropagation()
     e.preventDefault()
+    // Use the handle's own document — `activeDocument` resolves to whatever
+    // leaf is currently focused, which is wrong when the gantt is mounted
+    // inside an inline markdown embed (the embed's host note may not be the
+    // active leaf, so mousemove/mouseup listeners would land on the wrong
+    // document and drag would silently no-op).
+    const doc = handle.ownerDocument
     drag.isDragging = true
     drag.dragMoved = false
     drag.dragSide = side
@@ -82,8 +88,8 @@ export function attachDragHandle(
     }
 
     const onUp = safeAsync(async () => {
-      activeDocument.removeEventListener('mousemove', onMove)
-      activeDocument.removeEventListener('mouseup', onUp)
+      doc.removeEventListener('mousemove', onMove)
+      doc.removeEventListener('mouseup', onUp)
       activeCleanup = null
       if (!drag.isDragging || !drag.dragTask || !drag.dragBarEl) return
       drag.isDragging = false
@@ -138,11 +144,11 @@ export function attachDragHandle(
       await onRefresh()
     })
 
-    activeDocument.addEventListener('mousemove', onMove)
-    activeDocument.addEventListener('mouseup', onUp)
+    doc.addEventListener('mousemove', onMove)
+    doc.addEventListener('mouseup', onUp)
     activeCleanup = () => {
-      activeDocument.removeEventListener('mousemove', onMove)
-      activeDocument.removeEventListener('mouseup', onUp)
+      doc.removeEventListener('mousemove', onMove)
+      doc.removeEventListener('mouseup', onUp)
     }
   })
 
@@ -173,6 +179,10 @@ export function attachBarMove(
   rect.addEventListener('mousedown', (e: MouseEvent) => {
     if (e.button !== 0) return
     e.preventDefault()
+    // See note in attachDragHandle: use the element's own document so embed
+    // mounts (which may not be the active leaf) still receive the drag
+    // events.
+    const doc = rect.ownerDocument
     drag.isDragging = true
     drag.dragMoved = false
     drag.dragSide = 'move'
@@ -197,8 +207,8 @@ export function attachBarMove(
     }
 
     const onUp = safeAsync(async () => {
-      activeDocument.removeEventListener('mousemove', onMove)
-      activeDocument.removeEventListener('mouseup', onUp)
+      doc.removeEventListener('mousemove', onMove)
+      doc.removeEventListener('mouseup', onUp)
       rect.classList.remove('pm-gantt-bar-grabbing')
       activeCleanup = null
       if (!drag.isDragging || !drag.dragTask || !drag.dragBarEl) return
@@ -254,11 +264,11 @@ export function attachBarMove(
     })
 
     rect.classList.add('pm-gantt-bar-grabbing')
-    activeDocument.addEventListener('mousemove', onMove)
-    activeDocument.addEventListener('mouseup', onUp)
+    doc.addEventListener('mousemove', onMove)
+    doc.addEventListener('mouseup', onUp)
     activeCleanup = () => {
-      activeDocument.removeEventListener('mousemove', onMove)
-      activeDocument.removeEventListener('mouseup', onUp)
+      doc.removeEventListener('mousemove', onMove)
+      doc.removeEventListener('mouseup', onUp)
     }
   })
 
