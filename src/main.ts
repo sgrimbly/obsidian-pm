@@ -1,4 +1,4 @@
-import { MarkdownPostProcessorContext, MarkdownView, Plugin, Notice } from 'obsidian'
+import { MarkdownPostProcessorContext, MarkdownView, Plugin, Notice, TFile, WorkspaceLeaf } from 'obsidian'
 import { DEFAULT_SETTINGS, PMSettings, Project, ViewMode } from './types'
 import { flattenTasks } from './store/TaskTreeOps'
 import { ProjectStore } from './store'
@@ -138,6 +138,32 @@ export default class PMPlugin extends Plugin {
       }
     })
 
+    this.addCommand({
+      id: 'open-current-as-markdown',
+      name: 'Open current project as Markdown',
+      checkCallback: (checking: boolean) => {
+        const projectView = this.app.workspace.getActiveViewOfType(ProjectView)
+        if (!projectView) return false
+        const filePath = projectView.filePath
+        const file = filePath ? this.app.vault.getAbstractFileByPath(filePath) : null
+        if (!(file instanceof TFile)) return false
+        if (checking) return true
+        void this.openAsMarkdown(projectView.leaf, file)
+        return true
+      }
+    })
+
+    // Auto-open project files into the Project view (bookmarkable).
+    // Defer with a small delay so Obsidian's own markdown-mount finishes
+    // before we override. setTimeout(0) sometimes races with mid-flight
+    // render — 50ms gives the markdown view time to settle so our
+    // setViewState cleanly replaces it instead of competing.
+    this.registerEvent(
+      this.app.workspace.on('file-open', (file) => {
+        window.setTimeout(() => this.maybeAutoOpenAsProject(file), 50)
+      })
+    )
+
     // Inline embeds: `pm-gantt`, `pm-table`, `pm-kanban`, `pm-calendar`.
     // Each renders the corresponding SubView (the same components used inside
     // the full Project view) into the codeblock element, scoped to one
@@ -168,6 +194,76 @@ export default class PMPlugin extends Plugin {
       return
     }
     ctx.addChild(new CodeBlockEmbed(el, this, config, defaultView))
+  }
+
+  private maybeAutoOpenAsProject(file: TFile | null): void {
+    if (!file) return
+    if (!this.settings.autoOpenProjects) return
+    const cache = this.app.metadataCache.getFileCache(file)
+    // Accept boolean true (parsed YAML) or string "true" (edge cases on
+    // freshly-modified files where the cache hasn't re-parsed yet).
+    const flag = cache?.frontmatter?.['pm-project']
+    if (flag !== true && flag !== 'true') return
+
+    // Look for an existing pm-project leaf already rendering this file. If
+    // one exists, focus it and close any duplicate markdown leaf Obsidian
+    // created.
+    let existingProjectLeaf: WorkspaceLeaf | null = null
+    this.app.workspace.iterateAllLeaves((leaf) => {
+      if (existingProjectLeaf) return
+      if (leaf.view.getViewType() !== PM_PROJECT_VIEW_TYPE) return
+      const vs = leaf.getViewState().state as Record<string, unknown> | undefined
+      if (vs && vs['filePath'] === file.path) existingProjectLeaf = leaf
+    })
+
+    const markdownLeaves: WorkspaceLeaf[] = []
+    this.app.workspace.iterateAllLeaves((leaf) => {
+      if (leaf.view.getViewType() !== 'markdown') return
+      const view = leaf.view as MarkdownView
+      if (view.file?.path === file.path) markdownLeaves.push(leaf)
+    })
+
+    if (existingProjectLeaf) {
+      for (const leaf of markdownLeaves) leaf.detach()
+      this.app.workspace.revealLeaf(existingProjectLeaf)
+      return
+    }
+
+    const target = markdownLeaves[0]
+    if (!target) return
+
+    // `active: true` forces a full view mount instead of a state-only patch,
+    // which has been observed to no-op when the leaf was mid-rendering the
+    // previous markdown view. revealLeaf after the await ensures focus.
+    // If setViewState resolves but the view type doesn't actually transition
+    // (an Obsidian quirk seen in some cases), fall back to detach + reopen
+    // via the router, which mirrors the manual "Open current file as project"
+    // command's behaviour.
+    target
+      .setViewState({ type: PM_PROJECT_VIEW_TYPE, state: { filePath: file.path }, active: true })
+      .then(() => {
+        this.app.workspace.revealLeaf(target)
+        if (target.view.getViewType() !== PM_PROJECT_VIEW_TYPE) {
+          target.detach()
+          void this.router.openProjectByPath(file.path)
+        }
+      })
+      .catch(() => undefined)
+  }
+
+  private async openAsMarkdown(leaf: WorkspaceLeaf, file: TFile): Promise<void> {
+    // Set autoOpenProjects to false transiently so the file-open hook doesn't
+    // immediately yank the leaf back into the Project view.
+    const saved = this.settings.autoOpenProjects
+    this.settings.autoOpenProjects = false
+    try {
+      await leaf.setViewState({ type: 'markdown', state: { file: file.path, mode: 'source' } })
+    } finally {
+      // Restore on next tick so the in-flight file-open event has fired.
+      activeWindow.setTimeout(() => {
+        this.settings.autoOpenProjects = saved
+      }, 0)
+    }
   }
 
   onunload(): void {

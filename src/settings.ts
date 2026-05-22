@@ -98,6 +98,18 @@ export class PMSettingTab extends PluginSettingTab {
         })
       )
 
+    new Setting(containerEl)
+      .setName('Auto-open project files as project view')
+      .setDesc(
+        'When opening a file with `pm-project: true` frontmatter (e.g. via Bookmarks or wikilink), switch the leaf straight into the Project view. Disable to edit the markdown directly. Reverse a single open with the "Open current project as Markdown" command.'
+      )
+      .addToggle((t) =>
+        t.setValue(this.plugin.settings.autoOpenProjects).onChange(async (v) => {
+          this.plugin.settings.autoOpenProjects = v
+          await this.plugin.saveSettings()
+        })
+      )
+
     // ── Notifications ─────────────────────────────────────────────────────────
     new Setting(containerEl).setName('Due date notifications').setHeading()
 
