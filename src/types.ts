@@ -97,6 +97,11 @@ export interface PerProjectFilter {
    *  source of truth). Sort is a view overlay; clearing it returns to the
    *  underlying project order. Never mutates project.tasks. */
   ganttSort?: GanttSortMode
+  /** Last sub-view the user had open in this project (table/gantt/kanban/
+   *  calendar). Restored on next open. Overrides the global `defaultView`
+   *  setting for projects the user has interacted with. Omitted for
+   *  never-opened projects. */
+  lastView?: ViewMode
 }
 
 export interface StatusConfig {
