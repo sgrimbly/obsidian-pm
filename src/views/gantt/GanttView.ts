@@ -229,28 +229,46 @@ export class GanttView implements SubView {
     renderDependencyArrows(ctx)
     renderMilestoneLabels(ctx)
 
-    // Forward wheel events from left panel to the scroll container
-    // (left panel has overflow:hidden, so wheel events are swallowed otherwise)
+    // Trackpad wheel events always carry both axes — a "vertical" swipe still
+    // produces a small deltaX wobble that, if applied, makes the timeline
+    // drift sideways. We classify each event as dominantly horizontal,
+    // dominantly vertical, or pure-vertical-with-shift (treated as
+    // horizontal). A small deadzone rejects the residual wobble that survives
+    // the dominance check on near-pure vertical gestures.
+    //
+    // For dominantly-vertical events we do not preventDefault on the right
+    // panel — the browser handles vertical scroll natively. For the left
+    // panel (overflow:hidden) we have to forward deltaY manually, but we
+    // still drop the wobbly deltaX.
+    const HORIZONTAL_DEADZONE = 2 // px per event; smaller than typical wobble
+    const HORIZONTAL_DOMINANCE = 1.5 // |dx| must beat |dy| by this ratio
+    const isHorizontalGesture = (e: WheelEvent): boolean => {
+      const ax = Math.abs(e.deltaX)
+      const ay = Math.abs(e.deltaY)
+      return ax > HORIZONTAL_DEADZONE && ax > ay * HORIZONTAL_DOMINANCE
+    }
+
+    // Left panel (overflow:hidden) — always forward vertical scroll. Apply
+    // horizontal only if the gesture is clearly horizontal.
     const onLeftWheel = (e: WheelEvent) => {
       rightPanel.scrollTop += e.deltaY
-      rightPanel.scrollLeft += e.deltaX
+      if (isHorizontalGesture(e)) {
+        rightPanel.scrollLeft += e.deltaX
+      }
       e.preventDefault()
     }
     leftPanel.addEventListener('wheel', onLeftWheel, { passive: false })
     this.cleanupFns.push(() => leftPanel.removeEventListener('wheel', onLeftWheel))
 
-    // Also intercept wheel on the right panel so horizontal trackpad gestures
-    // (and Shift+wheel) reliably scroll the timeline. Without this, when the
-    // left panel is hidden some platforms route the gesture to higher-level
-    // handlers (e.g. Obsidian's pane-swipe navigation) instead of letting
-    // the browser scroll the rightPanel natively.
+    // Right panel — let the browser do native vertical scroll. We only
+    // intercept clearly-horizontal trackpad gestures (to assert ownership
+    // before Obsidian's pane-swipe handler) and Shift+wheel (legacy mouse
+    // path for horizontal scroll).
     const onRightWheel = (e: WheelEvent) => {
-      // Native vertical scroll is already handled by browser; we only need
-      // to assert ownership of horizontal deltas + Shift+wheel.
-      if (e.deltaX !== 0) {
+      if (isHorizontalGesture(e)) {
         rightPanel.scrollLeft += e.deltaX
         e.preventDefault()
-      } else if (e.shiftKey && e.deltaY !== 0) {
+      } else if (e.shiftKey && e.deltaY !== 0 && e.deltaX === 0) {
         rightPanel.scrollLeft += e.deltaY
         e.preventDefault()
       }
