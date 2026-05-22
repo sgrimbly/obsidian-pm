@@ -91,7 +91,12 @@ export interface SavedView {
 export interface PerProjectFilter {
   filter: FilterState
   activeSavedViewId: string | null
+  /** Last calendar mode the user had selected in this project
+   *  (month/week/year). Omitted = 'month'. View-only state. */
+  calendarMode?: 'month' | 'week' | 'year'
 }
+
+export type CalendarMode = 'month' | 'week' | 'year'
 
 export interface StatusConfig {
   id: string
