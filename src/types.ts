@@ -102,7 +102,12 @@ export interface PerProjectFilter {
    *  setting for projects the user has interacted with. Omitted for
    *  never-opened projects. */
   lastView?: ViewMode
+  /** Last calendar mode the user had selected in this project
+   *  (month/week/year). Omitted = 'month'. View-only state. */
+  calendarMode?: 'month' | 'week' | 'year'
 }
+
+export type CalendarMode = 'month' | 'week' | 'year'
 
 export interface StatusConfig {
   id: string

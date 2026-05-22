@@ -1,6 +1,7 @@
-import { ButtonComponent } from 'obsidian'
+import { ButtonComponent, Menu } from 'obsidian'
 import type PMPlugin from '../../main'
-import type { Project, Task, FilterState } from '../../types'
+import type { CalendarMode, Project, Task, FilterState } from '../../types'
+import { makeDefaultFilter } from '../../types'
 import type { SubView } from '../SubView'
 import { applyTaskFilterPromote } from '../../store/TaskFilter'
 import { flattenTasks, findTask } from '../../store/TaskTreeOps'
@@ -10,22 +11,31 @@ import { Temporal, today, parsePlainDate } from '../../dates'
 import { openTaskModal } from '../../ui/ModalFactory'
 
 /**
- * Calendar (month-grid) view.
+ * Calendar view with three modes:
  *
- * - 6-row × 7-column grid of dates (always shows the full month plus the
- *   surrounding-week padding).
- * - Each task whose [start, due] range covers part of a week renders as a
- *   single **continuous bar** spanning those columns. Multi-week tasks
- *   produce one bar segment per week, with continuation arrows on the
- *   wrapping edges. Within a week, segments are lane-packed so they don't
- *   visually overlap.
- * - Dragging a bar to a different cell shifts the task's start/due by the
- *   offset between the task's anchor (`start` if set, else `due`) and the
- *   drop cell, preserving duration.
+ * - **Month** (default): 6×7 grid of dates. Continuous bars span multiple
+ *   days; per-week segments stack in lanes to avoid overlap. The full
+ *   bookend-week padding around the month is shown.
+ * - **Week**: a single tall week-row. Same bar layout, more vertical room
+ *   per cell (useful when a week has many overlapping tasks).
+ * - **Year**: 12 mini-month grids (3×4 layout), each cell coloured by task
+ *   density. Click a month label to drill into Month mode; click any day
+ *   to jump there. No bars (too small to render meaningfully).
+ *
+ * Interaction beyond the bars:
+ * - Right-click any day cell → `+ Add task here` / `+ Add milestone here`,
+ *   opens TaskModal with `start = due = clickedDate` pre-filled.
+ * - Hover the date number on any cell → digest tooltip listing every task
+ *   active that day (complements bars when many overlap).
+ * - Drag a bar onto a different day → shifts task by (drop − anchor) days,
+ *   preserving duration. Anchor is the task's actual start date.
  */
 export class CalendarView implements SubView {
-  private currentMonth: { year: number; month: number }
+  private mode: CalendarMode
+  private anchor: Temporal.PlainDate
   private cleanupFns: (() => void)[] = []
+  private digestEl: HTMLElement | null = null
+  private digestTimer: number | null = null
 
   constructor(
     private container: HTMLElement,
@@ -34,13 +44,14 @@ export class CalendarView implements SubView {
     private onRefresh: () => Promise<void>,
     private filter: FilterState
   ) {
-    const t = today()
-    this.currentMonth = { year: t.year, month: t.month }
+    this.anchor = today()
+    this.mode = this.plugin.settings.projectFilters[this.project.filePath]?.calendarMode ?? 'month'
   }
 
   destroy(): void {
     for (const fn of this.cleanupFns) fn()
     this.cleanupFns = []
+    this.hideDigest()
   }
 
   render(): void {
@@ -48,100 +59,238 @@ export class CalendarView implements SubView {
     this.container.empty()
     this.container.addClass('pm-calendar-view')
     this.renderToolbar()
-    this.renderGrid()
+    if (this.mode === 'month') this.renderMonthGrid()
+    else if (this.mode === 'week') this.renderWeekGrid()
+    else this.renderYearGrid()
   }
 
   // ─── Toolbar ────────────────────────────────────────────────────────────
   private renderToolbar(): void {
     const bar = this.container.createDiv('pm-calendar-toolbar')
-    new ButtonComponent(bar).setButtonText('◀').onClick(() => this.shiftMonth(-1))
+    new ButtonComponent(bar).setButtonText('◀').onClick(() => this.shift(-1))
     new ButtonComponent(bar).setButtonText('Today').onClick(() => {
-      const t = today()
-      this.currentMonth = { year: t.year, month: t.month }
+      this.anchor = today()
       this.render()
     })
-    new ButtonComponent(bar).setButtonText('▶').onClick(() => this.shiftMonth(1))
+    new ButtonComponent(bar).setButtonText('▶').onClick(() => this.shift(1))
+
     const label = bar.createEl('span', { cls: 'pm-calendar-month-label' })
-    const monthName = Temporal.PlainDate.from({
-      year: this.currentMonth.year,
-      month: this.currentMonth.month,
-      day: 1
-    }).toLocaleString(undefined, { month: 'long', year: 'numeric' })
-    label.textContent = monthName
+    label.textContent = this.periodLabel()
+
+    bar.createEl('span', { cls: 'pm-calendar-sep' })
+
+    const modes: Array<{ id: CalendarMode; label: string }> = [
+      { id: 'month', label: 'Month' },
+      { id: 'week', label: 'Week' },
+      { id: 'year', label: 'Year' }
+    ]
+    for (const m of modes) {
+      const btn = bar.createEl('button', { text: m.label, cls: 'pm-calendar-mode-btn' })
+      if (m.id === this.mode) btn.addClass('pm-calendar-mode-btn--active')
+      btn.addEventListener('click', () => this.setMode(m.id))
+    }
   }
 
-  private shiftMonth(delta: number): void {
-    let { year, month } = this.currentMonth
-    month += delta
-    while (month < 1) {
-      month += 12
-      year -= 1
+  private periodLabel(): string {
+    if (this.mode === 'month') {
+      return this.anchor.toLocaleString(undefined, { month: 'long', year: 'numeric' })
     }
-    while (month > 12) {
-      month -= 12
-      year += 1
+    if (this.mode === 'week') {
+      const weekStart = this.anchor.subtract({ days: this.anchor.dayOfWeek - 1 })
+      const weekEnd = weekStart.add({ days: 6 })
+      const sameMonth = weekStart.month === weekEnd.month
+      const startStr = weekStart.toLocaleString(undefined, { month: 'short', day: 'numeric' })
+      const endStr = sameMonth
+        ? String(weekEnd.day)
+        : weekEnd.toLocaleString(undefined, { month: 'short', day: 'numeric' })
+      return `${startStr} – ${endStr}, ${weekStart.year}`
     }
-    this.currentMonth = { year, month }
+    return String(this.anchor.year)
+  }
+
+  private shift(delta: number): void {
+    if (this.mode === 'month') {
+      this.anchor = this.anchor.add({ months: delta })
+    } else if (this.mode === 'week') {
+      this.anchor = this.anchor.add({ days: delta * 7 })
+    } else {
+      this.anchor = this.anchor.add({ years: delta })
+    }
     this.render()
   }
 
-  // ─── Grid ──────────────────────────────────────────────────────────────
-  private renderGrid(): void {
-    const grid = this.container.createDiv('pm-calendar-grid')
+  private setMode(mode: CalendarMode): void {
+    if (mode === this.mode) return
+    this.mode = mode
+    void this.persistMode()
+    this.render()
+  }
 
-    // Day-of-week header row.
-    const dowRow = grid.createDiv('pm-calendar-dow-row')
-    for (const dow of ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']) {
-      dowRow.createDiv('pm-calendar-dow').setText(dow)
+  private async persistMode(): Promise<void> {
+    if (!this.project.filePath) return
+    const existing = this.plugin.settings.projectFilters[this.project.filePath] ?? {
+      filter: makeDefaultFilter(),
+      activeSavedViewId: null
     }
+    this.plugin.settings.projectFilters[this.project.filePath] = {
+      ...existing,
+      calendarMode: this.mode === 'month' ? undefined : this.mode
+    }
+    await this.plugin.saveSettings()
+  }
 
-    // Compute first day of grid: the Monday of the week containing the 1st.
+  // ─── Month grid (6×7) ──────────────────────────────────────────────────
+  private renderMonthGrid(): void {
+    const grid = this.container.createDiv('pm-calendar-grid')
+    this.appendDowRow(grid)
+
     const firstOfMonth = Temporal.PlainDate.from({
-      year: this.currentMonth.year,
-      month: this.currentMonth.month,
+      year: this.anchor.year,
+      month: this.anchor.month,
       day: 1
     })
-    const offset = firstOfMonth.dayOfWeek - 1 // 0..6
+    const offset = firstOfMonth.dayOfWeek - 1
     const gridStart = firstOfMonth.subtract({ days: offset })
 
-    const activeTasks = applyTaskFilterPromote(this.project.tasks, this.filter, this.plugin.settings.statuses)
-    const flatTasks = flattenTasks(activeTasks).map((f) => f.task)
-
+    const flatTasks = this.getFilteredTasks()
     const t = today()
 
     for (let week = 0; week < 6; week++) {
       const weekStart = gridStart.add({ days: week * 7 })
       const weekEnd = gridStart.add({ days: week * 7 + 6 })
       const weekRow = grid.createDiv('pm-calendar-week-row')
-
-      // Backdrop cells (date numbers + drop targets + today/weekend marks).
       for (let d = 0; d < 7; d++) {
         const date = weekStart.add({ days: d })
-        this.renderCell(weekRow, date, t)
+        this.renderCell(weekRow, date, t, this.anchor.month, flatTasks)
       }
-
-      // Continuous bars overlay — one bar per (task, week-segment), spanning
-      // the columns the task covers within this week. Lane-packed to avoid
-      // visual overlap.
       this.renderWeekBars(weekRow, weekStart, weekEnd, flatTasks)
     }
   }
 
+  // ─── Week grid (1×7, tall) ───────────────────────────────────────────────
+  private renderWeekGrid(): void {
+    const grid = this.container.createDiv('pm-calendar-grid pm-calendar-grid--week')
+    this.appendDowRow(grid)
+
+    const weekStart = this.anchor.subtract({ days: this.anchor.dayOfWeek - 1 })
+    const weekEnd = weekStart.add({ days: 6 })
+
+    const flatTasks = this.getFilteredTasks()
+    const t = today()
+
+    const weekRow = grid.createDiv('pm-calendar-week-row pm-calendar-week-row--tall')
+    for (let d = 0; d < 7; d++) {
+      const date = weekStart.add({ days: d })
+      this.renderCell(weekRow, date, t, this.anchor.month, flatTasks)
+    }
+    this.renderWeekBars(weekRow, weekStart, weekEnd, flatTasks)
+  }
+
+  // ─── Year grid (12 mini months) ─────────────────────────────────────────
+  private renderYearGrid(): void {
+    const grid = this.container.createDiv('pm-calendar-year-grid')
+    const flatTasks = this.getFilteredTasks()
+    const t = today()
+
+    // Pre-compute task counts per date for density colouring.
+    const counts = new Map<string, number>()
+    for (const task of flatTasks) {
+      const start = parsePlainDate(task.start)
+      const due = parsePlainDate(task.due)
+      if (!start && !due) continue
+      const lo = (start ?? due) as Temporal.PlainDate
+      const hi = (due ?? start) as Temporal.PlainDate
+      let d = lo
+      while (Temporal.PlainDate.compare(d, hi) <= 0) {
+        const key = d.toString()
+        counts.set(key, (counts.get(key) ?? 0) + 1)
+        d = d.add({ days: 1 })
+      }
+    }
+
+    let maxCount = 0
+    for (const c of counts.values()) if (c > maxCount) maxCount = c
+
+    for (let month = 1; month <= 12; month++) {
+      this.renderMiniMonth(grid, this.anchor.year, month, counts, maxCount, t)
+    }
+  }
+
+  private renderMiniMonth(
+    grid: HTMLElement,
+    year: number,
+    month: number,
+    counts: Map<string, number>,
+    maxCount: number,
+    nowDate: Temporal.PlainDate
+  ): void {
+    const wrap = grid.createDiv('pm-calendar-mini-month')
+    const header = wrap.createDiv('pm-calendar-mini-header')
+    header.textContent = Temporal.PlainDate.from({ year, month, day: 1 }).toLocaleString(undefined, { month: 'long' })
+    header.addEventListener('click', () => {
+      this.anchor = Temporal.PlainDate.from({ year, month, day: 1 })
+      this.setMode('month')
+    })
+
+    const grid7 = wrap.createDiv('pm-calendar-mini-grid')
+    for (const dow of ['M', 'T', 'W', 'T', 'F', 'S', 'S']) {
+      grid7.createDiv('pm-calendar-mini-dow').setText(dow)
+    }
+    const first = Temporal.PlainDate.from({ year, month, day: 1 })
+    const offset = first.dayOfWeek - 1
+    const gridStart = first.subtract({ days: offset })
+    for (let i = 0; i < 42; i++) {
+      const date = gridStart.add({ days: i })
+      const inMonth = date.month === month
+      const dayCell = grid7.createDiv('pm-calendar-mini-day')
+      dayCell.setText(inMonth ? String(date.day) : '')
+      if (!inMonth) dayCell.addClass('pm-calendar-mini-day--other')
+      if (date.equals(nowDate)) dayCell.addClass('pm-calendar-mini-day--today')
+      const count = counts.get(date.toString()) ?? 0
+      if (count > 0 && maxCount > 0) {
+        const intensity = Math.min(1, count / maxCount)
+        dayCell.style.setProperty('--pm-mini-density', String(intensity))
+        dayCell.addClass('pm-calendar-mini-day--has-tasks')
+        dayCell.title = `${count} task${count === 1 ? '' : 's'} on ${date.toString()}`
+      }
+      dayCell.addEventListener('click', () => {
+        this.anchor = date
+        this.setMode('month')
+      })
+    }
+  }
+
+  // ─── Day-of-week header row ─────────────────────────────────────────────
+  private appendDowRow(grid: HTMLElement): void {
+    const dowRow = grid.createDiv('pm-calendar-dow-row')
+    for (const dow of ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']) {
+      dowRow.createDiv('pm-calendar-dow').setText(dow)
+    }
+  }
+
+  // ─── Single cell (date number, drop target, right-click menu) ──────────
   private renderCell(
     row: HTMLElement,
     date: Temporal.PlainDate,
-    nowDate: Temporal.PlainDate
+    nowDate: Temporal.PlainDate,
+    inMonthMonth: number,
+    allTasks: Task[]
   ): void {
     const cell = row.createDiv('pm-calendar-cell')
-    if (date.month !== this.currentMonth.month) cell.addClass('pm-calendar-cell-other')
+    if (this.mode === 'month' && date.month !== inMonthMonth) {
+      cell.addClass('pm-calendar-cell-other')
+    }
     if (date.equals(nowDate)) cell.addClass('pm-calendar-cell-today')
     if (date.dayOfWeek === 6 || date.dayOfWeek === 7) cell.addClass('pm-calendar-cell-weekend')
 
     const head = cell.createDiv('pm-calendar-cell-head')
-    head.createSpan({ cls: 'pm-calendar-date', text: String(date.day) })
+    const dateEl = head.createSpan({ cls: 'pm-calendar-date', text: String(date.day) })
 
-    // Drop target: receives bar drags, shifts the task by the offset between
-    // its anchor date (carried in the payload) and this cell's date.
+    // Hover digest: tasks active on this date
+    dateEl.addEventListener('mouseenter', () => this.showDigestFor(date, dateEl, allTasks))
+    dateEl.addEventListener('mouseleave', () => this.hideDigest())
+
+    // Drag-drop target (bar drag)
     cell.addEventListener('dragover', (e: DragEvent) => {
       e.preventDefault()
       cell.addClass('pm-calendar-cell--drop-target')
@@ -178,13 +327,81 @@ export class CalendarView implements SubView {
         await this.onRefresh()
       })
     )
+
+    // Right-click → create a task or milestone starting on this day
+    cell.addEventListener('contextmenu', (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      if (target.closest('.pm-calendar-bar')) return // bar has its own future menu
+      e.preventDefault()
+      const menu = new Menu()
+      const iso = date.toString()
+      menu.addItem((item) =>
+        item
+          .setTitle('+ Add task here')
+          .setIcon('plus-circle')
+          .onClick(() => this.openCreate(iso, 'task'))
+      )
+      menu.addItem((item) =>
+        item
+          .setTitle('+ Add milestone here')
+          .setIcon('flag')
+          .onClick(() => this.openCreate(iso, 'milestone'))
+      )
+      menu.showAtMouseEvent(e)
+    })
+  }
+
+  private openCreate(iso: string, type: 'task' | 'milestone'): void {
+    openTaskModal(this.plugin, this.project, {
+      defaults: { start: iso, due: iso, type },
+      onSave: async () => {
+        await this.onRefresh()
+      }
+    })
   }
 
   /**
-   * For a single week (Mon–Sun) compute the visible segment of every task
-   * whose [lo, hi] range intersects this week, lane-pack them to avoid
-   * vertical overlap, and render each as a single continuous bar.
+   * Hover digest panel — small floating tooltip listing every task active
+   * on the hovered date. Complements the bars (which only label the first
+   * visible segment) and the bar tooltips (which only show one task at a
+   * time). Shows after a 300 ms delay so brief mouse-overs don't flash it.
    */
+  private showDigestFor(date: Temporal.PlainDate, anchor: HTMLElement, tasks: Task[]): void {
+    this.hideDigest()
+    this.digestTimer = activeWindow.setTimeout(() => {
+      const active = tasks.filter((t) => taskCoversDate(t, date))
+      if (active.length === 0) return
+      const digest = this.container.ownerDocument.body.createDiv('pm-calendar-digest')
+      digest.createDiv({ cls: 'pm-calendar-digest-date', text: date.toLocaleString(undefined, { weekday: 'long', month: 'short', day: 'numeric' }) })
+      const list = digest.createDiv('pm-calendar-digest-list')
+      for (const task of active) {
+        const status = getStatusConfig(this.plugin.settings.statuses, task.status)
+        const row = list.createDiv('pm-calendar-digest-row')
+        const dot = row.createSpan({ cls: 'pm-calendar-digest-dot' })
+        dot.style.backgroundColor = status?.color ?? COLOR_ACCENT
+        row.createSpan({ cls: 'pm-calendar-digest-title', text: task.title })
+      }
+      const rect = anchor.getBoundingClientRect()
+      digest.style.position = 'fixed'
+      digest.style.top = `${rect.bottom + 4}px`
+      digest.style.left = `${rect.left}px`
+      digest.style.zIndex = '9999'
+      this.digestEl = digest
+    }, 300)
+  }
+
+  private hideDigest(): void {
+    if (this.digestTimer !== null) {
+      activeWindow.clearTimeout(this.digestTimer)
+      this.digestTimer = null
+    }
+    if (this.digestEl) {
+      this.digestEl.remove()
+      this.digestEl = null
+    }
+  }
+
+  // ─── Bar rendering (continuous, lane-packed, per week) ──────────────────
   private renderWeekBars(
     weekRow: HTMLElement,
     weekStart: Temporal.PlainDate,
@@ -195,8 +412,8 @@ export class CalendarView implements SubView {
       task: Task
       lo: Temporal.PlainDate
       hi: Temporal.PlainDate
-      startCol: number // 1..7
-      endCol: number // 2..8 (CSS grid end-line, exclusive)
+      startCol: number
+      endCol: number
       continuesLeft: boolean
       continuesRight: boolean
     }
@@ -224,12 +441,10 @@ export class CalendarView implements SubView {
         continuesRight: Temporal.PlainDate.compare(hi, weekEnd) > 0
       })
     }
-
     if (segments.length === 0) return
 
-    // Lane pack — greedy by start column.
     segments.sort((a, b) => a.startCol - b.startCol || a.task.title.localeCompare(b.task.title))
-    const laneEnds: number[] = [] // laneEnds[i] = first free column in lane i (exclusive)
+    const laneEnds: number[] = []
     const laneOf: number[] = []
     for (const seg of segments) {
       let lane = laneEnds.findIndex((end) => end <= seg.startCol)
@@ -243,9 +458,7 @@ export class CalendarView implements SubView {
     }
 
     const overlay = weekRow.createDiv('pm-calendar-bars-overlay')
-    segments.forEach((seg, i) => {
-      this.renderBar(overlay, seg, laneOf[i])
-    })
+    segments.forEach((seg, i) => this.renderBar(overlay, seg, laneOf[i]))
   }
 
   private renderBar(
@@ -271,15 +484,9 @@ export class CalendarView implements SubView {
     bar.style.backgroundColor = color
     if (continuesLeft) bar.addClass('pm-calendar-bar--continues-left')
     if (continuesRight) bar.addClass('pm-calendar-bar--continues-right')
-    // Show the title only on the first visible segment (where the bar
-    // actually starts). Continuation segments stay blank so the eye reads
-    // the run as one task without label repetition.
     if (!continuesLeft) bar.setText(task.title)
-
     bar.title = `${task.title}\n${status?.label ?? task.status}\nStart: ${task.start || '—'}  Due: ${task.due || '—'}`
 
-    // Drag — anchor is the task's actual start (or due if no start), so
-    // dropping on a cell intuitively means "make this start on that day".
     const anchor = parsePlainDate(task.start) ?? lo
     bar.draggable = true
     bar.addEventListener('dragstart', (e: DragEvent) => {
@@ -301,4 +508,19 @@ export class CalendarView implements SubView {
       })
     })
   }
+
+  // ─── Helpers ────────────────────────────────────────────────────────────
+  private getFilteredTasks(): Task[] {
+    const active = applyTaskFilterPromote(this.project.tasks, this.filter, this.plugin.settings.statuses)
+    return flattenTasks(active).map((f) => f.task)
+  }
+}
+
+function taskCoversDate(task: Task, date: Temporal.PlainDate): boolean {
+  const start = parsePlainDate(task.start)
+  const due = parsePlainDate(task.due)
+  if (!start && !due) return false
+  const lo = start ?? (due as Temporal.PlainDate)
+  const hi = due ?? (start as Temporal.PlainDate)
+  return Temporal.PlainDate.compare(date, lo) >= 0 && Temporal.PlainDate.compare(date, hi) <= 0
 }
