@@ -77,6 +77,22 @@ export class PMSettingTab extends PluginSettingTab {
       )
 
     new Setting(containerEl)
+      .setName('Today position in Gantt timeline')
+      .setDesc(
+        'Where "today" sits in the viewport on initial load and when you press the Today button. Lower values keep today near the left so more upcoming work is visible; 50% is the classic centred default.'
+      )
+      .addSlider((sl) =>
+        sl
+          .setLimits(5, 50, 5)
+          .setValue(Math.round(this.plugin.settings.ganttTodayPosition * 100))
+          .setDynamicTooltip()
+          .onChange(async (v) => {
+            this.plugin.settings.ganttTodayPosition = v / 100
+            await this.plugin.saveSettings()
+          })
+      )
+
+    new Setting(containerEl)
       .setName('Show subtasks on board')
       .setDesc('Display subtasks as individual cards on the kanban board.')
       .addToggle((t) =>
