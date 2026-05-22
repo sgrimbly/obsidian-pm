@@ -1,7 +1,8 @@
 import { ButtonComponent } from 'obsidian'
 import type PMPlugin from '../../main'
-import type { Project, Task, GanttGranularity, FilterState } from '../../types'
-import { type FlatTask, flattenTasks } from '../../store/TaskTreeOps'
+import type { Project, Task, GanttGranularity, GanttSortMode, FilterState } from '../../types'
+import { makeDefaultFilter } from '../../types'
+import { type FlatTask, flattenTasks, sortTaskTree } from '../../store/TaskTreeOps'
 import { applyTaskFilterPromote } from '../../store/TaskFilter'
 import { openTaskModal } from '../../ui/ModalFactory'
 import type { SubView } from '../SubView'
@@ -105,6 +106,26 @@ export class GanttView implements SubView {
 
     new ButtonComponent(bar).setButtonText('Expand all').onClick(() => this.setAllCollapsed(false))
     new ButtonComponent(bar).setButtonText('Collapse all').onClick(() => this.setAllCollapsed(true))
+
+    // Row sort: view-only overlay on top of natural (taskIds) order.
+    bar.createEl('span', { cls: 'pm-gantt-sep' })
+    bar.createEl('span', { text: 'Sort:', cls: 'pm-gantt-sort-label' })
+    const sortSelect = bar.createEl('select', { cls: 'pm-gantt-sort-select' })
+    const sortOptions: Array<{ value: GanttSortMode; label: string }> = [
+      { value: 'natural', label: 'Natural' },
+      { value: 'start-asc', label: 'Start ↑' },
+      { value: 'start-desc', label: 'Start ↓' },
+      { value: 'due-asc', label: 'Due ↑' },
+      { value: 'due-desc', label: 'Due ↓' }
+    ]
+    const currentSort = this.getSortMode()
+    for (const opt of sortOptions) {
+      const optionEl = sortSelect.createEl('option', { text: opt.label, value: opt.value })
+      if (opt.value === currentSort) optionEl.selected = true
+    }
+    sortSelect.addEventListener('change', () => {
+      this.setSortMode(sortSelect.value as GanttSortMode)
+    })
   }
 
   private toggleLabelPanel(): void {
@@ -349,7 +370,32 @@ export class GanttView implements SubView {
   }
 
   private getVisibleTasks(): Task[] {
-    return applyTaskFilterPromote(this.project.tasks, this.filter, this.plugin.settings.statuses)
+    const filtered = applyTaskFilterPromote(this.project.tasks, this.filter, this.plugin.settings.statuses)
+    // Apply the per-project Gantt sort overlay. Default 'natural' is a
+    // pass-through — project.tasks order (= taskIds order in the project
+    // file) is the source of truth; sort is a view-only re-ordering.
+    const sortMode = this.getSortMode()
+    return sortTaskTree(filtered, sortMode)
+  }
+
+  private getSortMode(): GanttSortMode {
+    return this.plugin.settings.projectFilters[this.project.filePath]?.ganttSort ?? 'natural'
+  }
+
+  private setSortMode(mode: GanttSortMode): void {
+    if (!this.plugin.settings.projectFilters[this.project.filePath]) {
+      this.plugin.settings.projectFilters[this.project.filePath] = {
+        filter: makeDefaultFilter(),
+        activeSavedViewId: null
+      }
+    }
+    if (mode === 'natural') {
+      delete this.plugin.settings.projectFilters[this.project.filePath].ganttSort
+    } else {
+      this.plugin.settings.projectFilters[this.project.filePath].ganttSort = mode
+    }
+    void this.plugin.saveSettings()
+    this.render()
   }
 
   private scrollToToday(): void {

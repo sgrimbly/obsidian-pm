@@ -88,9 +88,15 @@ export interface SavedView {
   viewMode?: ViewMode
 }
 
+export type GanttSortMode = 'natural' | 'start-asc' | 'start-desc' | 'due-asc' | 'due-desc'
+
 export interface PerProjectFilter {
   filter: FilterState
   activeSavedViewId: string | null
+  /** Per-project Gantt row sort. Omitted = 'natural' (taskIds order, the
+   *  source of truth). Sort is a view overlay; clearing it returns to the
+   *  underlying project order. Never mutates project.tasks. */
+  ganttSort?: GanttSortMode
 }
 
 export interface StatusConfig {

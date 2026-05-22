@@ -8,6 +8,7 @@ import {
   findTask,
   flattenTasks,
   moveTaskInTree,
+  sortTaskTree,
   totalLoggedHours,
   updateTaskInTree
 } from './TaskTreeOps'
@@ -211,5 +212,98 @@ describe('totalLoggedHours', () => {
       ]
     })
     expect(totalLoggedHours(t)).toBe(5.5)
+  })
+})
+
+describe('sortTaskTree', () => {
+  it('returns the input by reference when mode is "natural"', () => {
+    const tasks = [task({ id: 'b', start: '2026-06-01' }), task({ id: 'a', start: '2026-05-01' })]
+    expect(sortTaskTree(tasks, 'natural')).toBe(tasks)
+  })
+
+  it('sorts top-level tasks by start ascending', () => {
+    const tasks = [
+      task({ id: 'jul', start: '2026-07-01' }),
+      task({ id: 'may', start: '2026-05-01' }),
+      task({ id: 'jun', start: '2026-06-01' })
+    ]
+    const sorted = sortTaskTree(tasks, 'start-asc')
+    expect(sorted.map((t) => t.id)).toEqual(['may', 'jun', 'jul'])
+  })
+
+  it('sorts top-level tasks by start descending', () => {
+    const tasks = [
+      task({ id: 'may', start: '2026-05-01' }),
+      task({ id: 'jul', start: '2026-07-01' }),
+      task({ id: 'jun', start: '2026-06-01' })
+    ]
+    const sorted = sortTaskTree(tasks, 'start-desc')
+    expect(sorted.map((t) => t.id)).toEqual(['jul', 'jun', 'may'])
+  })
+
+  it('sorts by due date when mode targets due', () => {
+    const tasks = [
+      task({ id: 'late', start: '2026-05-01', due: '2026-08-01' }),
+      task({ id: 'early', start: '2026-05-01', due: '2026-06-01' })
+    ]
+    expect(sortTaskTree(tasks, 'due-asc').map((t) => t.id)).toEqual(['early', 'late'])
+  })
+
+  it('sinks tasks without the sort-key date to the end', () => {
+    const tasks = [
+      task({ id: 'nostart', start: '' }),
+      task({ id: 'jun', start: '2026-06-01' }),
+      task({ id: 'may', start: '2026-05-01' })
+    ]
+    expect(sortTaskTree(tasks, 'start-asc').map((t) => t.id)).toEqual(['may', 'jun', 'nostart'])
+  })
+
+  it('puts milestones first on a date tie', () => {
+    const tasks = [
+      task({ id: 'cr', start: '2026-06-19', type: 'task' }),
+      task({ id: 'notif', start: '2026-06-19', type: 'milestone' })
+    ]
+    expect(sortTaskTree(tasks, 'start-asc').map((t) => t.id)).toEqual(['notif', 'cr'])
+  })
+
+  it('falls back to original order on full tie (stable sort)', () => {
+    const tasks = [
+      task({ id: 'first', start: '2026-05-01' }),
+      task({ id: 'second', start: '2026-05-01' }),
+      task({ id: 'third', start: '2026-05-01' })
+    ]
+    expect(sortTaskTree(tasks, 'start-asc').map((t) => t.id)).toEqual(['first', 'second', 'third'])
+  })
+
+  it('sorts subtasks within their parent (preserves grouping)', () => {
+    const tasks = [
+      task({
+        id: 'parent-a',
+        start: '2026-05-01',
+        subtasks: [
+          task({ id: 'a-late', start: '2026-07-01' }),
+          task({ id: 'a-early', start: '2026-06-01' })
+        ]
+      }),
+      task({
+        id: 'parent-b',
+        start: '2026-04-01',
+        subtasks: [
+          task({ id: 'b-late', start: '2026-09-01' }),
+          task({ id: 'b-early', start: '2026-08-01' })
+        ]
+      })
+    ]
+    const sorted = sortTaskTree(tasks, 'start-asc')
+    expect(sorted.map((t) => t.id)).toEqual(['parent-b', 'parent-a'])
+    expect(sorted[0].subtasks.map((t) => t.id)).toEqual(['b-early', 'b-late'])
+    expect(sorted[1].subtasks.map((t) => t.id)).toEqual(['a-early', 'a-late'])
+  })
+
+  it('does not mutate the input', () => {
+    const tasks = [task({ id: 'b', start: '2026-06-01' }), task({ id: 'a', start: '2026-05-01' })]
+    const idsBefore = tasks.map((t) => t.id)
+    sortTaskTree(tasks, 'start-asc')
+    expect(tasks.map((t) => t.id)).toEqual(idsBefore)
   })
 })
