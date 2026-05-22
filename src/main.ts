@@ -1,5 +1,5 @@
-import { MarkdownView, Plugin, Notice } from 'obsidian'
-import { DEFAULT_SETTINGS, PMSettings, Project } from './types'
+import { MarkdownPostProcessorContext, MarkdownView, Plugin, Notice } from 'obsidian'
+import { DEFAULT_SETTINGS, PMSettings, Project, ViewMode } from './types'
 import { flattenTasks } from './store/TaskTreeOps'
 import { ProjectStore } from './store'
 import { PMSettingTab } from './settings'
@@ -10,6 +10,8 @@ import { openProjectModal, openTaskModal, openProjectPicker, openTaskPicker, ope
 import { Notifier } from './components/Notifier'
 import { migrateProjects } from './migration'
 import { safeAsync } from './utils'
+import { parseEmbedConfig } from './embed/parseEmbedConfig'
+import { CodeBlockEmbed } from './embed/CodeBlockEmbed'
 
 export default class PMPlugin extends Plugin {
   settings: PMSettings = { ...DEFAULT_SETTINGS }
@@ -136,8 +138,36 @@ export default class PMPlugin extends Plugin {
       }
     })
 
+    // Inline embeds: `pm-gantt`, `pm-table`, `pm-kanban`, `pm-calendar`.
+    // Each renders the corresponding SubView (the same components used inside
+    // the full Project view) into the codeblock element, scoped to one
+    // project. The configuration body is YAML; `file:` is required.
+    const VIEW_BY_LANG: Record<string, ViewMode> = {
+      'pm-gantt': 'gantt',
+      'pm-table': 'table',
+      'pm-kanban': 'kanban',
+      'pm-calendar': 'calendar'
+    }
+    for (const [lang, view] of Object.entries(VIEW_BY_LANG)) {
+      this.registerMarkdownCodeBlockProcessor(lang, (source, el, ctx) =>
+        this.renderEmbed(source, el, ctx, view)
+      )
+    }
+
     this.addSettingTab(new PMSettingTab(this.app, this))
     this.notifier.start()
+  }
+
+  private renderEmbed(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext, defaultView: ViewMode): void {
+    const { config, error } = parseEmbedConfig(source)
+    if (!config) {
+      el.empty()
+      el.addClass('pm-embed', 'pm-embed-error')
+      el.createEl('div', { text: 'Project manager embed error', cls: 'pm-embed-error-title' })
+      el.createEl('div', { text: error ?? 'Unknown error.', cls: 'pm-embed-error-msg' })
+      return
+    }
+    ctx.addChild(new CodeBlockEmbed(el, this, config, defaultView))
   }
 
   onunload(): void {
