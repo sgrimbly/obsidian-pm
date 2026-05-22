@@ -152,6 +152,9 @@ export class ProjectView extends ItemView {
     if (saved) {
       this.filter = saved.filter
       this.activeSavedViewId = saved.activeSavedViewId
+      // Per-project memory of the last sub-view the user had open. Falls
+      // through to the constructor's defaultView if absent.
+      if (saved.lastView) this.currentView = saved.lastView
     } else {
       this.filter = makeDefaultFilter()
       this.activeSavedViewId = null
@@ -170,6 +173,19 @@ export class ProjectView extends ItemView {
       ...existing,
       filter: this.filter,
       activeSavedViewId: this.activeSavedViewId
+    }
+    await this.plugin.saveSettings()
+  }
+
+  private async persistLastView(): Promise<void> {
+    if (!this.filePath) return
+    const existing = this.plugin.settings.projectFilters[this.filePath] ?? {
+      filter: makeDefaultFilter(),
+      activeSavedViewId: null
+    }
+    this.plugin.settings.projectFilters[this.filePath] = {
+      ...existing,
+      lastView: this.currentView
     }
     await this.plugin.saveSettings()
   }
@@ -355,6 +371,7 @@ export class ProjectView extends ItemView {
       active: this.currentView,
       onChange: (mode) => {
         this.currentView = mode
+        void this.persistLastView()
         this.renderCurrentView()
       }
     })
