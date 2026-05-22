@@ -334,8 +334,14 @@ export class GanttView implements SubView {
   private scrollToToday(): void {
     if (!this.scrollEl) return
     const x = dateToX(this.cfg, today())
-    const center = x - this.scrollEl.clientWidth / 2
-    this.scrollEl.scrollLeft = Math.max(0, center)
+    // `ganttTodayPosition` is a 0–1 fraction of viewport width: 0 = today flush
+    // left, 0.5 = centred (classic Gantt default), 1 = flush right. The
+    // settings slider enforces a sensible 0.05–0.5 range. Lower values expose
+    // more of the future to the right, which is what most forward-planning
+    // workflows want.
+    const fraction = this.plugin.settings.ganttTodayPosition
+    const offset = x - this.scrollEl.clientWidth * fraction
+    this.scrollEl.scrollLeft = Math.max(0, offset)
   }
 
   private setAllCollapsed(collapsed: boolean): void {

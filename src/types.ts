@@ -121,6 +121,7 @@ export interface PMSettings {
   autoSchedule: boolean
   kanbanShowSubtasks: boolean
   saveTaskOnClose: boolean
+  ganttTodayPosition: number
   projectFilters: Record<string, PerProjectFilter>
 }
 
@@ -155,6 +156,7 @@ export const DEFAULT_SETTINGS: PMSettings = {
   notificationLeadDays: 2,
   autoSchedule: true,
   saveTaskOnClose: true,
+  ganttTodayPosition: 0.25,
   projectFilters: {}
 }
 
