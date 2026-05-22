@@ -159,7 +159,14 @@ export class ProjectView extends ItemView {
 
   private async persistFilter(): Promise<void> {
     if (!this.filePath) return
+    // Spread the existing entry so other persisted fields (sub-view memory,
+    // gantt sort, future extensions) aren't wiped on filter change.
+    const existing = this.plugin.settings.projectFilters[this.filePath] ?? {
+      filter: makeDefaultFilter(),
+      activeSavedViewId: null
+    }
     this.plugin.settings.projectFilters[this.filePath] = {
+      ...existing,
       filter: this.filter,
       activeSavedViewId: this.activeSavedViewId
     }
