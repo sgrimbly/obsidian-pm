@@ -1575,6 +1575,16 @@
   letter-spacing: 0.03em;
 }
 
+/* Inline milestone title, rendered to the right of the diamond on the
+   milestone's own row (mirrors .pm-gantt-bar-label-overflow). */
+.pm-gantt-milestone-label-inline {
+  font-size: 11px;
+  fill: var(--text-normal);
+  font-weight: 500;
+  dominant-baseline: central;
+  white-space: pre;
+}
+
 .pm-gantt-bar-icon {
   font-size: 11px;
   pointer-events: none;

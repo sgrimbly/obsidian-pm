@@ -364,9 +364,26 @@ function renderMilestoneDiamond(g: SVGGElement, task: Task, row: number, color: 
   diamond.addEventListener('click', () => {
     openTaskModal(ctx.plugin, ctx.project, { task, onSave: () => ctx.onRefresh() })
   })
+
+  // Inline label to the right of the diamond — mirrors the task-bar overflow
+  // label so a milestone is identifiable on its own row, rather than only via
+  // the header band (which crowds the month labels and toolbar at low zoom).
+  const label = svgEl('text', {
+    x: cx + size + 6,
+    y: cy + 5,
+    class: 'pm-gantt-milestone-label-inline'
+  })
+  label.textContent = task.title
+  label.style.cursor = 'pointer'
+  label.style.pointerEvents = 'auto'
+  label.addEventListener('click', (e: MouseEvent) => {
+    e.stopPropagation()
+    openTaskModal(ctx.plugin, ctx.project, { task, onSave: () => ctx.onRefresh() })
+  })
+  g.appendChild(label)
 }
 
-// ─── Milestone labels ─────────────────────────────────────────────────────
+// ─── Milestone guide lines ─────────────────────────────────────────────────
 
 export function renderMilestoneLabels(ctx: RendererContext): void {
   const milestones = ctx.flatTasks.filter((f) => f.task.type === 'milestone' && (f.task.due || f.task.start))
@@ -395,15 +412,9 @@ export function renderMilestoneLabels(ctx: RendererContext): void {
       })
     )
 
-    const label = svgEl('text', {
-      x,
-      y: 14,
-      'text-anchor': 'middle',
-      class: 'pm-gantt-milestone-label',
-      fill: color
-    })
-    label.textContent = task.title.length > 16 ? task.title.slice(0, 14) + '\u2026' : task.title
-    labelsG.appendChild(label)
+    // Milestone titles render inline beside each diamond (see
+    // renderMilestoneDiamond); here we only draw the vertical guide line, so
+    // the title no longer overlaps the header month labels / toolbar.
   }
 
   ctx.svgEl.appendChild(labelsG)
