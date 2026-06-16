@@ -79,9 +79,9 @@ export class PMSettingTab extends PluginSettingTab {
       )
 
     new Setting(containerEl)
-      .setName('Today position in Gantt timeline')
+      .setName('Today position in gantt timeline')
       .setDesc(
-        'Where "today" sits in the viewport on initial load and when you press the Today button. Lower values keep today near the left so more upcoming work is visible; 50% is the classic centred default.'
+        'Where "today" sits in the viewport on initial load and when you press the today button. Lower values keep today near the left so more upcoming work is visible; 50% is the classic centred default.'
       )
       .addSlider((sl) =>
         sl
@@ -101,6 +101,17 @@ export class PMSettingTab extends PluginSettingTab {
         t.setValue(this.plugin.settings.kanbanShowSubtasks).onChange(async (v) => {
           this.plugin.settings.kanbanShowSubtasks = v
           await this.plugin.saveSettings()
+        })
+      )
+
+    new Setting(containerEl)
+      .setName('Show description preview on board')
+      .setDesc('Display the first few lines of each task description on kanban cards.')
+      .addToggle((t) =>
+        t.setValue(this.plugin.settings.kanbanShowDescriptionPreview).onChange(async (v) => {
+          this.plugin.settings.kanbanShowDescriptionPreview = v
+          await this.plugin.saveSettings()
+          this.plugin.refreshProjectViews()
         })
       )
 
@@ -247,18 +258,12 @@ export class PMSettingTab extends PluginSettingTab {
     const projects = await this.plugin.store.loadAllProjects(folder)
     let remapped = 0
     for (const project of projects) {
-      const flat = flattenTasks(project.tasks)
-      let modified = false
-      for (const { task } of flat) {
-        if (task.status === deletedId) {
-          task.status = defaultStatus.id
-          task.updatedAt = new Date().toISOString()
-          remapped++
-          modified = true
-        }
-      }
-      if (modified) {
-        await this.plugin.store.saveProject(project)
+      const ids = flattenTasks(project.tasks)
+        .filter(({ task }) => task.status === deletedId)
+        .map(({ task }) => task.id)
+      if (ids.length) {
+        await this.plugin.store.updateTasks(project, ids, { status: defaultStatus.id })
+        remapped += ids.length
       }
     }
     if (remapped > 0) {
@@ -274,7 +279,7 @@ export class PMSettingTab extends PluginSettingTab {
       const row = container.createDiv('pm-settings-status-row')
 
       // Drag handle
-      row.createEl('span', { text: '⠿', cls: 'pm-settings-drag-handle' })
+      row.createSpan({ text: '⠿', cls: 'pm-settings-drag-handle' })
       row.draggable = true
       row.addEventListener('dragstart', (e) => {
         e.dataTransfer?.setData('text/plain', String(i))
@@ -325,7 +330,7 @@ export class PMSettingTab extends PluginSettingTab {
       const completeLabel = row.createEl('label', { cls: 'pm-settings-complete-toggle' })
       const checkbox = completeLabel.createEl('input', { type: 'checkbox' })
       checkbox.checked = s.complete
-      completeLabel.createEl('span', { text: 'Done', cls: 'pm-settings-complete-text' })
+      completeLabel.createSpan({ text: 'Done', cls: 'pm-settings-complete-text' })
       checkbox.addEventListener('change', () => {
         this.plugin.settings.statuses[i].complete = checkbox.checked
         void this.plugin.saveSettings()

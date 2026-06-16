@@ -70,6 +70,11 @@ export class GanttView implements SubView {
     this.pendingScroll = pos
   }
 
+  refresh(): void {
+    this.pendingScroll = this.getScrollPosition()
+    this.render()
+  }
+
   render(): void {
     this.cleanupFns.forEach((fn) => fn())
     this.cleanupFns = []
@@ -88,7 +93,13 @@ export class GanttView implements SubView {
   private renderGranularityControls(): void {
     const bar = this.container.createDiv('pm-gantt-controls')
     const levels: GanttGranularity[] = ['day', 'week', 'month', 'quarter', 'year']
-    const labels: Record<GanttGranularity, string> = { day: 'Day', week: 'Week', month: 'Month', quarter: 'Quarter', year: 'Year' }
+    const labels: Record<GanttGranularity, string> = {
+      day: 'Day',
+      week: 'Week',
+      month: 'Month',
+      quarter: 'Quarter',
+      year: 'Year'
+    }
 
     for (const level of levels) {
       const btn = bar.createEl('button', { text: labels[level], cls: 'pm-gantt-zoom-btn' })
@@ -101,7 +112,7 @@ export class GanttView implements SubView {
       })
     }
 
-    bar.createEl('span', { cls: 'pm-gantt-sep' })
+    bar.createSpan({ cls: 'pm-gantt-sep' })
     new ButtonComponent(bar).setButtonText('Today').onClick(() => this.scrollToToday())
 
     new ButtonComponent(bar).setButtonText('Expand all').onClick(() => this.setAllCollapsed(false))
@@ -139,14 +150,14 @@ export class GanttView implements SubView {
     // Left panel: task labels (hidden when labelPanelHidden is true)
     const leftPanel = wrapper.createDiv('pm-gantt-left')
     if (this.labelPanelHidden) {
-      leftPanel.style.display = 'none'
+      leftPanel.addClass('pm-gantt-left--hidden')
     } else {
       leftPanel.style.width = `${this.labelWidth}px`
       leftPanel.style.minWidth = `${this.labelWidth}px`
     }
     const leftHeader = leftPanel.createDiv('pm-gantt-left-header')
     leftHeader.style.height = `${HEADER_HEIGHT}px`
-    leftHeader.createEl('span', { text: 'Task', cls: 'pm-gantt-left-header-label' })
+    leftHeader.createSpan({ text: 'Task', cls: 'pm-gantt-left-header-label' })
     // Collapse chevron at the right edge of the task-list header (Notion-style).
     const collapseBtn = leftHeader.createEl('button', {
       cls: 'pm-gantt-collapse-btn',
@@ -158,7 +169,7 @@ export class GanttView implements SubView {
 
     // Resize handle (hidden when label panel is collapsed)
     const resizeHandle = wrapper.createDiv('pm-gantt-resize-handle')
-    if (this.labelPanelHidden) resizeHandle.style.display = 'none'
+    if (this.labelPanelHidden) resizeHandle.addClass('pm-gantt-resize-handle--hidden')
     let resizing = false
     let startX = 0
     let startWidth = 0
@@ -324,7 +335,7 @@ export class GanttView implements SubView {
       leftBody.scrollTop = rightPanel.scrollTop
     })
 
-    requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
       syncSpacer()
       if (this.pendingScroll) {
         this.scrollEl.scrollTop = this.pendingScroll.top
@@ -415,6 +426,7 @@ export class GanttView implements SubView {
     for (const { task } of flattenTasks(this.project.tasks)) {
       if (task.subtasks.length > 0) task.collapsed = collapsed
     }
+    void this.plugin.persistCollapsedState(this.project)
     this.render()
   }
 }

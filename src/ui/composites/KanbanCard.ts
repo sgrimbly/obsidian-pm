@@ -1,15 +1,14 @@
 import type { Task } from '../../types'
 import { formatDateShort } from '../../utils'
 import { AvatarStack } from '../primitives/AvatarStack'
-import { Badge } from '../primitives/Badge'
 import { Chip } from '../primitives/Chip'
-import { DueDateChip } from '../primitives/DueDateChip'
 import { ProgressBar } from '../primitives/ProgressBar'
 import { TimeChip } from '../primitives/TimeChip'
 
 export interface KanbanCardProps {
   task: Task
   priorityColor?: string
+  descriptionPreview?: string
   parentTitle?: string
   subtaskProgress?: { done: number; total: number }
   loggedHours: number
@@ -38,19 +37,38 @@ export class KanbanCard {
     const body = card.createDiv('pm-kanban-card-body')
 
     if (props.parentTitle) {
-      body.createEl('span', { text: props.parentTitle, cls: 'pm-kanban-card-parent' })
+      body.createSpan({ text: props.parentTitle, cls: 'pm-kanban-card-parent' })
     }
 
     const titleRow = body.createDiv('pm-kanban-card-title-row')
-    titleRow.createEl('span', { text: task.title, cls: 'pm-kanban-card-title' })
+    titleRow.createSpan({ text: task.title, cls: 'pm-kanban-card-title' })
     if (task.type === 'milestone') {
-      new Badge(titleRow).setLabel('M').setSize('sm').setColor('var(--color-purple)').setTooltip('Milestone')
+      new Chip(titleRow)
+        .setLabel('M')
+        .setVariant('solid')
+        .setSize('sm')
+        .setColor('var(--color-purple)')
+        .setTooltip('Milestone')
     }
     if (task.type === 'subtask') {
-      new Badge(titleRow).setLabel('Sub').setSize('sm').setColor('var(--color-green)').setTooltip('Subtask')
+      new Chip(titleRow)
+        .setLabel('Sub')
+        .setVariant('solid')
+        .setSize('sm')
+        .setColor('var(--color-green)')
+        .setTooltip('Subtask')
     }
     if (task.recurrence) {
-      new Badge(titleRow).setLabel('R').setSize('sm').setColor('var(--color-blue)').setTooltip('Recurring')
+      new Chip(titleRow)
+        .setLabel('R')
+        .setVariant('solid')
+        .setSize('sm')
+        .setColor('var(--color-blue)')
+        .setTooltip('Recurring')
+    }
+
+    if (props.descriptionPreview) {
+      body.createDiv({ cls: 'pm-kanban-card-description', text: props.descriptionPreview })
     }
 
     const est = task.timeEstimate ?? 0
@@ -61,18 +79,8 @@ export class KanbanCard {
     if (task.tags.length) {
       const tagsEl = body.createDiv('pm-kanban-card-tags')
       for (const tag of task.tags.slice(0, 3)) {
-        new Chip(tagsEl).setLabel(tag).setShape('pill').setSize('sm')
+        new Chip(tagsEl).setLabel(tag).setVariant('outline').setTag()
       }
-    }
-
-    const footer = body.createDiv('pm-kanban-card-footer')
-    new AvatarStack(footer).setNames(task.assignees).setMax(3).setSize('sm')
-
-    if (task.due) {
-      new DueDateChip(footer)
-        .setVariant('label')
-        .setLabel(formatDateShort(task.due))
-        .setUrgency(props.overdue ? 'overdue' : 'normal')
     }
 
     if (task.progress > 0) {
@@ -81,16 +89,26 @@ export class KanbanCard {
 
     if (props.subtaskProgress) {
       const { done, total } = props.subtaskProgress
-      body.createEl('span', {
+      body.createSpan({
         text: `${done}/${total} subtasks`,
         cls: 'pm-kanban-card-subtasks'
       })
     }
 
+    const footer = body.createDiv('pm-kanban-card-footer')
+    new AvatarStack(footer).setNames(task.assignees).setMax(3).setSize('sm')
+
+    if (task.due) {
+      const dueChip = new Chip(footer).setLabel(formatDateShort(task.due)).setSize('sm')
+      if (props.overdue) {
+        dueChip.setVariant('solid').setColor('var(--color-red)').setStrong()
+      }
+    }
+
     card.addEventListener('dragstart', (e) => {
       e.dataTransfer?.setData('text/plain', task.id)
       card.addClass('pm-kanban-card--dragging')
-      activeWindow.setTimeout(() => card.addClass('pm-dragging'), 0)
+      window.setTimeout(() => card.addClass('pm-dragging'), 0)
       props.onDragStart()
     })
 

@@ -6,7 +6,6 @@ import type { SubView } from '../SubView'
 import { applyTaskFilterPromote } from '../../store/TaskFilter'
 import { flattenTasks, findTask } from '../../store/TaskTreeOps'
 import { getStatusConfig, safeAsync } from '../../utils'
-import { COLOR_ACCENT } from '../../constants'
 import { Temporal, today, parsePlainDate } from '../../dates'
 import { openTaskModal } from '../../ui/ModalFactory'
 
@@ -318,10 +317,10 @@ export class CalendarView implements SubView {
         const offsetDays = date.since(sourceDate, { largestUnit: 'days' }).days
         if (offsetDays === 0) return
         const newStart = task.start
-          ? parsePlainDate(task.start)?.add({ days: offsetDays }).toString() ?? task.start
+          ? (parsePlainDate(task.start)?.add({ days: offsetDays }).toString() ?? task.start)
           : task.start
         const newDue = task.due
-          ? parsePlainDate(task.due)?.add({ days: offsetDays }).toString() ?? task.due
+          ? (parsePlainDate(task.due)?.add({ days: offsetDays }).toString() ?? task.due)
           : task.due
         await this.plugin.store.updateTask(this.project, task.id, { start: newStart, due: newDue })
         await this.onRefresh()
@@ -337,13 +336,13 @@ export class CalendarView implements SubView {
       const iso = date.toString()
       menu.addItem((item) =>
         item
-          .setTitle('+ Add task here')
+          .setTitle('+ add task here')
           .setIcon('plus-circle')
           .onClick(() => this.openCreate(iso, 'task'))
       )
       menu.addItem((item) =>
         item
-          .setTitle('+ Add milestone here')
+          .setTitle('+ add milestone here')
           .setIcon('flag')
           .onClick(() => this.openCreate(iso, 'milestone'))
       )
@@ -368,31 +367,35 @@ export class CalendarView implements SubView {
    */
   private showDigestFor(date: Temporal.PlainDate, anchor: HTMLElement, tasks: Task[]): void {
     this.hideDigest()
-    this.digestTimer = activeWindow.setTimeout(() => {
+    this.digestTimer = window.setTimeout(() => {
       const active = tasks.filter((t) => taskCoversDate(t, date))
       if (active.length === 0) return
       const digest = this.container.ownerDocument.body.createDiv('pm-calendar-digest')
-      digest.createDiv({ cls: 'pm-calendar-digest-date', text: date.toLocaleString(undefined, { weekday: 'long', month: 'short', day: 'numeric' }) })
+      digest.createDiv({
+        cls: 'pm-calendar-digest-date',
+        text: date.toLocaleString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })
+      })
       const list = digest.createDiv('pm-calendar-digest-list')
       for (const task of active) {
         const status = getStatusConfig(this.plugin.settings.statuses, task.status)
         const row = list.createDiv('pm-calendar-digest-row')
         const dot = row.createSpan({ cls: 'pm-calendar-digest-dot' })
-        dot.style.backgroundColor = status?.color ?? COLOR_ACCENT
+        dot.style.backgroundColor = status?.color ?? 'var(--interactive-accent)'
         row.createSpan({ cls: 'pm-calendar-digest-title', text: task.title })
       }
       const rect = anchor.getBoundingClientRect()
-      digest.style.position = 'fixed'
-      digest.style.top = `${rect.bottom + 4}px`
-      digest.style.left = `${rect.left}px`
-      digest.style.zIndex = '9999'
+      digest.addClass('pm-calendar-digest-floating')
+      digest.setCssProps({
+        '--pm-calendar-digest-top': `${rect.bottom + 4}px`,
+        '--pm-calendar-digest-left': `${rect.left}px`
+      })
       this.digestEl = digest
     }, 300)
   }
 
   private hideDigest(): void {
     if (this.digestTimer !== null) {
-      activeWindow.clearTimeout(this.digestTimer)
+      window.clearTimeout(this.digestTimer)
       this.digestTimer = null
     }
     if (this.digestEl) {
@@ -476,7 +479,7 @@ export class CalendarView implements SubView {
   ): void {
     const { task, lo, startCol, endCol, continuesLeft, continuesRight } = seg
     const status = getStatusConfig(this.plugin.settings.statuses, task.status)
-    const color = status?.color ?? COLOR_ACCENT
+    const color = status?.color ?? 'var(--interactive-accent)'
 
     const bar = overlay.createDiv('pm-calendar-bar')
     bar.style.gridColumn = `${startCol} / ${endCol}`
@@ -520,7 +523,8 @@ function taskCoversDate(task: Task, date: Temporal.PlainDate): boolean {
   const start = parsePlainDate(task.start)
   const due = parsePlainDate(task.due)
   if (!start && !due) return false
-  const lo = start ?? (due as Temporal.PlainDate)
-  const hi = due ?? (start as Temporal.PlainDate)
+  const lo = start ?? due
+  const hi = due ?? start
+  if (!lo || !hi) return false
   return Temporal.PlainDate.compare(date, lo) >= 0 && Temporal.PlainDate.compare(date, hi) <= 0
 }

@@ -1,8 +1,7 @@
 import { Menu } from 'obsidian'
 import type { Task, TaskStatus, TaskPriority, StatusConfig, PriorityConfig } from '../types'
-import { COLOR_MUTED, COLOR_MUTED_ALT } from '../constants'
 import { getStatusConfig, getPriorityConfig, formatBadgeText } from '../utils'
-import { Badge } from './primitives/Badge'
+import { Chip } from './primitives/Chip'
 
 export function renderStatusBadge(
   container: HTMLElement,
@@ -11,9 +10,11 @@ export function renderStatusBadge(
   onChange: (status: TaskStatus) => void
 ): HTMLElement {
   const config = getStatusConfig(statuses, task.status)
-  const badge = new Badge(container)
+  const badge = new Chip(container)
     .setLabel(formatBadgeText(config?.icon, config?.label ?? task.status))
-    .setColor(config?.color ?? COLOR_MUTED)
+    .setColor(config?.color ?? 'var(--text-muted)')
+    .setVariant('solid')
+    .setDot(!config?.icon)
     .onClick((e) => {
       const menu = new Menu()
       for (const s of statuses) {
@@ -36,9 +37,11 @@ export function renderPriorityBadge(
   onChange: (priority: TaskPriority) => void
 ): HTMLElement {
   const config = getPriorityConfig(priorities, task.priority)
-  const badge = new Badge(container)
+  const badge = new Chip(container)
     .setLabel(formatBadgeText(config?.icon, config?.label ?? task.priority))
-    .setColor(config?.color ?? COLOR_MUTED_ALT)
+    .setColor(config?.color ?? 'var(--text-muted)')
+    .setVariant('plain')
+    .setDot(!config?.icon)
     .onClick((e) => {
       const menu = new Menu()
       for (const p of priorities) {
@@ -61,7 +64,7 @@ export function renderStatusDot(
   cls = 'pm-subtask-dot'
 ): HTMLElement {
   const config = getStatusConfig(statuses, status)
-  const dot = container.createEl('span', { cls })
-  dot.style.background = config?.color ?? COLOR_MUTED
+  const dot = container.createSpan({ cls })
+  dot.style.background = config?.color ?? 'var(--text-muted)'
   return dot
 }

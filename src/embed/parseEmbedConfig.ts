@@ -31,6 +31,14 @@ const DEFAULT_HEIGHT = 480
 const VALID_VIEWS: ReadonlySet<ViewMode> = new Set(['gantt', 'table', 'kanban', 'calendar'])
 const VALID_GRANULARITY: ReadonlySet<GanttGranularity> = new Set(['day', 'week', 'month', 'quarter', 'year'])
 
+function isViewMode(value: string): value is ViewMode {
+  return VALID_VIEWS.has(value as ViewMode)
+}
+
+function isGanttGranularity(value: string): value is GanttGranularity {
+  return VALID_GRANULARITY.has(value as GanttGranularity)
+}
+
 export function parseEmbedConfig(source: string): EmbedParseResult {
   let raw: unknown
   try {
@@ -45,7 +53,8 @@ export function parseEmbedConfig(source: string): EmbedParseResult {
 
   const obj = raw as Record<string, unknown>
 
-  const file = typeof obj['file'] === 'string' ? (obj['file'] as string).trim() : ''
+  const fileValue = obj['file']
+  const file = typeof fileValue === 'string' ? fileValue.trim() : ''
   if (!file) {
     return { config: null, error: 'Missing required `file:` — vault-relative path to a project file.' }
   }
@@ -61,20 +70,26 @@ export function parseEmbedConfig(source: string): EmbedParseResult {
 
   let granularity: GanttGranularity | null = null
   if (obj['granularity'] !== undefined) {
-    const g = String(obj['granularity'])
-    if (!VALID_GRANULARITY.has(g as GanttGranularity)) {
+    if (typeof obj['granularity'] !== 'string') {
+      return { config: null, error: '`granularity:` must be a string — one of: day, week, month, quarter, year.' }
+    }
+    const g = obj['granularity']
+    if (!isGanttGranularity(g)) {
       return { config: null, error: `Invalid \`granularity:\` "${g}" — one of: day, week, month, quarter, year.` }
     }
-    granularity = g as GanttGranularity
+    granularity = g
   }
 
   let view: ViewMode | null = null
   if (obj['view'] !== undefined) {
-    const v = String(obj['view'])
-    if (!VALID_VIEWS.has(v as ViewMode)) {
+    if (typeof obj['view'] !== 'string') {
+      return { config: null, error: '`view:` must be a string — one of: gantt, table, kanban, calendar.' }
+    }
+    const v = obj['view']
+    if (!isViewMode(v)) {
       return { config: null, error: `Invalid \`view:\` "${v}" — one of: gantt, table, kanban, calendar.` }
     }
-    view = v as ViewMode
+    view = v
   }
 
   return { config: { file, height, granularity, view }, error: null }

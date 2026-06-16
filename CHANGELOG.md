@@ -7,20 +7,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The project list updates its task counts when tasks are added, changed, or removed instead of staying stale until the view is reopened ([#121](https://github.com/StepanKropachev/obsidian-pm/issues/121))
+
+## [1.6.1] - 2026-06-15
+
+### Changed
+
+- Task and project modals use Obsidian's native border, shadow, and corner styling instead of custom values
+- Status, priority, and tag labels follow Obsidian's native styling more closely
+- The accent color matches the Obsidian theme accent instead of a fixed purple
+- The Gantt today marker, milestone and subtask buttons, and row selection and hover highlights take their colors from the theme instead of fixed values
+- Kanban cards align the assignee and due date to the bottom of the card
+
+### Fixed
+
+- Subtasks created from a task's subtasks list or the add-subtask buttons are set to the subtask type automatically ([#82](https://github.com/StepanKropachev/obsidian-pm/issues/82))
+- Assignees written as note links (`[[People/Jane Doe]]`) show the person's name on their avatar instead of the link path ([#64](https://github.com/StepanKropachev/obsidian-pm/issues/64))
+
+## [1.6.0] - 2026-06-12
+
 ### Added
 
-- Setting "Save tasks on close" (default on) — turn off to make closing the task modal via X or click-outside discard edits, so only the Save button persists changes ([#62](https://github.com/StepanKropachev/obsidian-pm/issues/62))
-- "Open as note" button in the task modal header opens the task's underlying note in a new tab — useful when the modal is too small to read the full description
+- Completing a task records a completion date, editable in the task modal and stored in frontmatter ([#93](https://github.com/StepanKropachev/obsidian-pm/issues/93))
+- Setting "Show description preview on board" (default off) shows the first few lines of each task description on kanban cards, with markdown stripped and clamped to three lines ([#59](https://github.com/StepanKropachev/obsidian-pm/issues/59))
+
+### Changed
+
+- Saving a task rewrites only the files affected by the change instead of every task file in the project
+- Projects open faster: task data loads from Obsidian's metadata cache and note bodies are read on demand. Previously loaded projects reopen instantly; edits made outside the plugin are still detected and reloaded
+- The table renders only the rows in view, so it stays responsive in large projects
+- Views update in place after an edit, preserving scroll position and selection
+- Select all in the table selects every task matching the current filter, not just the rows in view
+- Collapse state is stored in plugin settings instead of task frontmatter. Collapsing or expanding a subtree no longer modifies task files, and the `collapsed` frontmatter key is no longer written
+- Expand/collapse subtasks toggle is styled consistently across the table and Gantt views
+- Gantt task bars use stronger contrast between completed and remaining work ([#87](https://github.com/StepanKropachev/obsidian-pm/issues/87))
+- Gantt task bars no longer overlay a stripe on tasks that have subtasks
+
+### Fixed
+
+- Images pasted or dropped onto a task are saved in the task's own folder instead of the vault root. The folder follows the task when it's renamed or archived, and is removed when the task is deleted
+- Duplicating a task with its subtasks failed with a "note already exists" error and dropped the subtasks. Copies of a subtree now get distinct file names ([#90](https://github.com/StepanKropachev/obsidian-pm/issues/90))
+- Progress bar labels showing 0% instead of the actual value in some views
+- Subtasks toggle not working in the Gantt view
+
+## [1.5.0] - 2026-05-25
+
+### Added
+
+- Setting "Save tasks on close" (default on). Turn off to make closing the task modal via X or click-outside discard edits, so only the Save button persists changes ([#62](https://github.com/StepanKropachev/obsidian-pm/issues/62))
+- "Open as note" button in the task modal header opens the task's underlying note in a new tab. Handy when the modal is too small to read the full description
 - Paste a screenshot or drag any file onto the task modal description to save it under the vault's attachments folder and embed it as `![[...]]` at the cursor
 - Search box, filters (status, priority, assignee, tag, due date, archived), and saved views now appear above every view, not just the table
 - Filter state persists per project across plugin reloads
 - Saved views remember the view mode they were created in; selecting one switches the project to that mode
-- Gantt now lifts a matching task to the top level when its parent is filtered out, so search and filters reveal deeply nested matches
+- Gantt lifts a matching task to the top level when its parent is filtered out, so search and filters reveal deeply nested matches
+- Release artifacts carry GitHub build provenance attestations; run `gh attestation verify <file> --owner StepanKropachev` to confirm a download was built from this repo
 
 ### Changed
 
-- Now we use the first letters of first and second word for avatar initials
-- UI now follows the Obsidian theme: accent color, near/overdue colors, badge palette, and avatars all read from Obsidian CSS variables instead of the previous hardcoded purple
+- UI follows the Obsidian theme: accent color, near/overdue colors, badge palette, and avatars all read from Obsidian CSS variables instead of the previous hardcoded purple
 - Toolbar, gantt, filter, and bulk-action buttons render at native size (previously compact)
 - Saved-view tabs share the soft accent treatment with filter pills (previously filled accent)
 - `+ save view` and inline chip-list add buttons are native buttons (no longer dashed pills)
@@ -28,13 +75,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Confirm "Delete" uses Obsidian's native warning style
 - Light-theme primary buttons use solid accent (`mod-cta`) instead of the bordered variant
 - Project view header gear, bulk-action clear, chip remove, and table row icon buttons use lucide icons
-- Chip remove buttons turn red on hover, uniformly across tags, assignees, and dependencies
+- Chip remove buttons turn red on hover across tags, assignees, and dependencies
 - Project-card and kanban-card progress bars are 3px tall
 - The filter row collapses when no filters are active; click the `Filter` pill to expand
 - Toggling a filter pill no longer steals focus from the search input
-- Gantt milestone labels and dependency arrows now honor the active filter
+- Gantt milestone labels and dependency arrows now respect the active filter
 - View switcher buttons are icon-only (previously icon + label)
-- Assignee avatar initials now combine the first letter of the first two words (e.g., "Michael Jordan" → "MJ" instead of "MI"), reducing collisions for people who share a first name
+- Assignee avatar initials combine the first letter of the first two words (e.g., "Michael Jordan" becomes "MJ" instead of "MI"), so people who share a first name don't collide as often
+- New task files save as `<slug>.md` instead of `<slug>-<id>.md`. Existing files keep their current name until the title changes or you rename them yourself
 
 ### Removed
 
@@ -47,7 +95,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Kanban cards silently dropping the 4th+ assignee (now shown as `+N`)
 - Duplicate task entries when creating a task
 - Saved-view pill staying highlighted after the user diverged from its filter
-- Collapsing a task in the table did nothing while a filter was active; collapse now hides descendants under any visible parent, and matches whose original parent is filtered out continue to be promoted to the top level
+- Garbled avatar initials when an assignee was stored as `[[Wiki Link]]`; initials, tooltip, and color now derive from the parsed display name ([#64](https://github.com/StepanKropachev/obsidian-pm/issues/64))
+- Renaming a task to a title that's already used by another file in the project now shows an inline error next to the title input
 
 ## [1.4.0] - 2026-04-29
 

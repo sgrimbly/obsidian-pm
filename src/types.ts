@@ -1,5 +1,5 @@
-import { COLOR_ACCENT } from './constants'
 import { today } from './dates'
+import type { TaskIndex } from './store/TaskIndex'
 
 export type TaskStatus = string
 export type TaskPriority = 'critical' | 'high' | 'medium' | 'low'
@@ -39,6 +39,7 @@ export interface Task {
   start: string // YYYY-MM-DD, empty string = unset
   due: string // YYYY-MM-DD, empty string = unset
   progress: number // 0–100
+  completed: string // YYYY-MM-DD, empty string = not completed; stamped when status becomes complete
   assignees: string[]
   tags: string[]
   subtasks: Task[]
@@ -47,6 +48,7 @@ export interface Task {
   timeEstimate?: number // hours
   timeLogs?: TimeLog[]
   customFields: Record<string, unknown>
+  /** UI state, persisted per project in plugin settings (data.json), not in frontmatter. */
   collapsed: boolean
   createdAt: string
   updatedAt: string
@@ -67,6 +69,8 @@ export interface Project {
   updatedAt: string
   filePath: string // resolved vault path
   savedViews: SavedView[]
+  /** Transient id → {task, parentId} index. Rebuilt on load, maintained by store mutators. Not serialized. */
+  taskIndex: TaskIndex
 }
 
 export interface FilterState {
@@ -136,10 +140,13 @@ export interface PMSettings {
   notificationLeadDays: number
   autoSchedule: boolean
   kanbanShowSubtasks: boolean
+  kanbanShowDescriptionPreview: boolean
   saveTaskOnClose: boolean
   autoOpenProjects: boolean
   ganttTodayPosition: number
   projectFilters: Record<string, PerProjectFilter>
+  /** Collapsed task ids per project file path. UI state — lives here so toggles don't rewrite task files. */
+  collapsedTasks: Record<string, string[]>
 }
 
 // ─── Defaults ────────────────────────────────────────────────────────────────
@@ -169,13 +176,15 @@ export const DEFAULT_SETTINGS: PMSettings = {
   priorities: DEFAULT_PRIORITIES,
   globalTeamMembers: [],
   kanbanShowSubtasks: false,
+  kanbanShowDescriptionPreview: false,
   notificationsEnabled: true,
   notificationLeadDays: 2,
   autoSchedule: true,
   saveTaskOnClose: true,
   autoOpenProjects: true,
   ganttTodayPosition: 0.25,
-  projectFilters: {}
+  projectFilters: {},
+  collapsedTasks: {}
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -196,6 +205,7 @@ export function makeTask(overrides: Partial<Task> = {}): Task {
     start: today().toString(),
     due: '',
     progress: 0,
+    completed: '',
     assignees: [],
     tags: [],
     subtasks: [],
@@ -214,7 +224,7 @@ export function makeProject(title: string, filePath: string): Project {
     id: makeId(),
     title,
     description: '',
-    color: COLOR_ACCENT,
+    color: '#8b72be',
     icon: '📋',
     tasks: [],
     customFields: [],
@@ -222,7 +232,8 @@ export function makeProject(title: string, filePath: string): Project {
     createdAt: now,
     updatedAt: now,
     filePath,
-    savedViews: []
+    savedViews: [],
+    taskIndex: new Map()
   }
 }
 

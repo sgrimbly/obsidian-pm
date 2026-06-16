@@ -59,7 +59,7 @@ export class CodeBlockEmbed extends MarkdownRenderChild {
 
   override onunload(): void {
     if (this.reloadDebounceTimer !== null) {
-      activeWindow.clearTimeout(this.reloadDebounceTimer)
+      window.clearTimeout(this.reloadDebounceTimer)
       this.reloadDebounceTimer = null
     }
     this.subview?.destroy?.()
@@ -72,8 +72,8 @@ export class CodeBlockEmbed extends MarkdownRenderChild {
   }
 
   private scheduleReload(): void {
-    if (this.reloadDebounceTimer !== null) activeWindow.clearTimeout(this.reloadDebounceTimer)
-    this.reloadDebounceTimer = activeWindow.setTimeout(
+    if (this.reloadDebounceTimer !== null) window.clearTimeout(this.reloadDebounceTimer)
+    this.reloadDebounceTimer = window.setTimeout(
       safeAsync(async () => {
         this.reloadDebounceTimer = null
         await this.renderProject()
@@ -91,7 +91,9 @@ export class CodeBlockEmbed extends MarkdownRenderChild {
     }
     const project = await this.plugin.store.loadProject(file)
     if (!project) {
-      this.renderError(`Could not parse a project from ${this.config.file}. Check that the file has \`pm-project: true\` in its frontmatter.`)
+      this.renderError(
+        `Could not parse a project from ${this.config.file}. Check that the file has \`pm-project: true\` in its frontmatter.`
+      )
       return
     }
     this.mountSubview(project)

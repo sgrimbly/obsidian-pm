@@ -1,12 +1,16 @@
 {
   "name": "project-manager",
-  "version": "1.4.0",
+  "version": "1.6.1",
   "description": "Obsidian Project Manager Plugin",
   "main": "main.js",
   "type": "module",
   "scripts": {
-    "dev": "tsdown --watch",
-    "build": "PRODUCTION=1 tsdown",
+    "dev": "run-p dev:js dev:css",
+    "dev:js": "tsdown --watch",
+    "dev:css": "node scripts/build-styles.mjs --watch",
+    "build": "run-p build:js build:css",
+    "build:js": "PRODUCTION=1 tsdown",
+    "build:css": "PRODUCTION=1 node scripts/build-styles.mjs",
     "check": "run-p check:**",
     "check:code": "oxlint ./src",
     "check:format": "oxfmt --check ./src",
@@ -22,28 +26,29 @@
   "devDependencies": {
     "@2bad/axiom": "2.0.0",
     "@2bad/tsconfig": "3.0.2",
-    "@types/node": "25.6.0",
-    "@typescript-eslint/parser": "8.59.0",
-    "@vitest/coverage-v8": "4.1.5",
-    "eslint": "9.39.4",
-    "eslint-plugin-obsidianmd": "0.2.4",
-    "npm-run-all2": "8.0.4",
+    "@types/node": "25.9.2",
+    "@typescript-eslint/parser": "8.61.0",
+    "@vitest/coverage-v8": "4.1.8",
+    "eslint": "10.4.1",
+    "eslint-plugin-obsidianmd": "0.3.0",
+    "lightningcss": "^1.32.0",
+    "npm-run-all2": "9.0.1",
     "obsidian": "1.12.3",
-    "oxfmt": "0.46.0",
-    "oxlint": "1.61.0",
+    "oxfmt": "0.54.0",
+    "oxlint": "1.69.0",
     "temporal-polyfill": "0.3.2",
-    "tsdown": "0.21.9",
-    "typescript": "6.0.2",
+    "tsdown": "0.22.2",
+    "typescript": "6.0.3",
     "vite-tsconfig-paths": "6.1.1",
-    "vitest": "4.1.5",
-    "yaml": "2.8.3"
+    "vitest": "4.1.8",
+    "yaml": "2.9.0"
   },
-  "packageManager": "pnpm@10.33.0",
+  "packageManager": "pnpm@11.5.3",
   "engines": {
     "node": ">=24"
   },
   "volta": {
     "node": "24.15.0",
-    "pnpm": "10.33.0"
+    "pnpm": "11.5.3"
   }
 }

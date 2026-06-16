@@ -18,7 +18,7 @@ export function renderTimeTrackingPanel(container: HTMLElement, task: Task): voi
 
   // Estimate
   const estRow = timeSection.createDiv('pm-time-est-row')
-  estRow.createEl('span', { text: 'Estimate:', cls: 'pm-time-label' })
+  estRow.createSpan({ text: 'Estimate:', cls: 'pm-time-label' })
   const estInput = estRow.createEl('input', { type: 'number', cls: 'pm-prop-text pm-time-est-input' })
   estInput.value = est > 0 ? String(est) : ''
   estInput.placeholder = 'Hours'
@@ -42,8 +42,9 @@ export function renderTimeTrackingPanel(container: HTMLElement, task: Task): voi
   const renderLogs = () => {
     logList.empty()
     if (!task.timeLogs) task.timeLogs = []
-    for (let i = 0; i < task.timeLogs.length; i++) {
-      const log = task.timeLogs[i]
+    const logs = task.timeLogs
+    for (let i = 0; i < logs.length; i++) {
+      const log = logs[i]
       const row = logList.createDiv('pm-time-log-row')
 
       const dateInput = row.createEl('input', { type: 'date', cls: 'pm-prop-date pm-time-log-date' })
@@ -71,7 +72,7 @@ export function renderTimeTrackingPanel(container: HTMLElement, task: Task): voi
       const rmBtn = row.createEl('button', { text: '\u2715', cls: 'pm-subtask-rm' })
       rmBtn.addClass('pm-subtask-rm--visible')
       rmBtn.addEventListener('click', () => {
-        task.timeLogs!.splice(i, 1)
+        logs.splice(i, 1)
         renderLogs()
       })
     }

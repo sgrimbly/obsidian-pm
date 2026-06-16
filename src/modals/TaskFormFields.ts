@@ -4,10 +4,9 @@ import { Project, Task, TaskType, Recurrence } from '../types'
 import { flattenTasks } from '../store/TaskTreeOps'
 import { wouldCreateCycle } from '../store/Scheduler'
 import { renderPropRow, renderProgressSlider, renderChipList } from '../ui/FormField'
-import { Badge } from '../ui/primitives/Badge'
+import { Chip } from '../ui/primitives/Chip'
 import { SegmentedControl } from '../ui/primitives/SegmentedControl'
-import { COLOR_MUTED } from '../constants'
-import { getStatusConfig, getPriorityConfig, formatBadgeText } from '../utils'
+import { getStatusConfig, getPriorityConfig, formatBadgeText, isTerminalStatus } from '../utils'
 import { renderCustomFieldInput } from './CustomFieldInputs'
 import { TaskPickerModal, TagPickerModal } from './PickerModals'
 
@@ -31,9 +30,11 @@ export function renderTaskFormFields(container: HTMLElement, ctx: TaskFormFields
   renderPropRow(container, 'Status', () => {
     const statusConfig = getStatusConfig(plugin.settings.statuses, task.status)
     const wrap = createDiv('pm-prop-value')
-    new Badge(wrap)
+    new Chip(wrap)
       .setLabel(formatBadgeText(statusConfig?.icon, statusConfig?.label ?? task.status))
-      .setColor(statusConfig?.color ?? COLOR_MUTED)
+      .setColor(statusConfig?.color ?? 'var(--text-muted)')
+      .setVariant('solid')
+      .setDot(!statusConfig?.icon)
       .onClick((e) => {
         const menu = new Menu()
         for (const s of plugin.settings.statuses) {
@@ -56,9 +57,11 @@ export function renderTaskFormFields(container: HTMLElement, ctx: TaskFormFields
   renderPropRow(container, 'Priority', () => {
     const prioConfig = getPriorityConfig(plugin.settings.priorities, task.priority)
     const wrap = createDiv('pm-prop-value')
-    new Badge(wrap)
+    new Chip(wrap)
       .setLabel(formatBadgeText(prioConfig?.icon, prioConfig?.label ?? task.priority))
-      .setColor(prioConfig?.color ?? COLOR_MUTED)
+      .setColor(prioConfig?.color ?? 'var(--text-muted)')
+      .setVariant('plain')
+      .setDot(!prioConfig?.icon)
       .onClick((e) => {
         const menu = new Menu()
         for (const p of plugin.settings.priorities) {
@@ -154,6 +157,19 @@ export function renderTaskFormFields(container: HTMLElement, ctx: TaskFormFields
     return input
   })
 
+  // Completed date — auto-stamped when the task enters a complete status, but editable.
+  // Shown once the task is in a complete status or already carries a date.
+  if (task.completed || isTerminalStatus(task.status, plugin.settings.statuses)) {
+    renderPropRow(container, 'Completed', () => {
+      const input = createEl('input', { type: 'date', cls: 'pm-prop-value pm-prop-date' })
+      input.value = task.completed
+      input.addEventListener('change', () => {
+        task.completed = input.value
+      })
+      return input
+    })
+  }
+
   // Recurrence
   renderPropRow(container, 'Repeat', () => {
     const wrap = createDiv('pm-prop-value pm-prop-recurrence')
@@ -185,7 +201,7 @@ export function renderTaskFormFields(container: HTMLElement, ctx: TaskFormFields
         })
 
         const endWrap = wrap.createDiv('pm-recur-end')
-        endWrap.createEl('span', { text: 'Until', cls: 'pm-recur-label' })
+        endWrap.createSpan({ text: 'Until', cls: 'pm-recur-label' })
         const endInput = endWrap.createEl('input', { type: 'date', cls: 'pm-prop-date pm-recur-end-input' })
         endInput.value = rec.endDate ?? ''
         endInput.addEventListener('change', () => {

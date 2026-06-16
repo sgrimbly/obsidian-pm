@@ -103,7 +103,7 @@ export class NoteLinkSuggest {
 
   private onBlur = (): void => {
     // Delay to allow click on suggestion item
-    activeWindow.setTimeout(() => this.hide(), 150)
+    window.setTimeout(() => this.hide(), 150)
   }
 
   private onScroll = (): void => {
@@ -207,7 +207,7 @@ export class NoteLinkSuggest {
     this.mirror.textContent = ''
     const textNode = activeDocument.createTextNode(textToCursor)
     this.mirror.appendChild(textNode)
-    const marker = activeDocument.createElement('span')
+    const marker = activeDocument.createSpan()
     marker.textContent = '\u200b' // zero-width space
     this.mirror.appendChild(marker)
 

@@ -1,6 +1,6 @@
 import { MarkdownPostProcessorContext, MarkdownView, Plugin, Notice, TFile, WorkspaceLeaf } from 'obsidian'
 import { DEFAULT_SETTINGS, PMSettings, Project, ViewMode } from './types'
-import { flattenTasks } from './store/TaskTreeOps'
+import { flattenTasks, findTask } from './store/TaskTreeOps'
 import { ProjectStore } from './store'
 import { PMSettingTab } from './settings'
 import { ProjectView, PM_PROJECT_VIEW_TYPE } from './views/ProjectView'
@@ -46,6 +46,7 @@ export default class PMPlugin extends Plugin {
   async onload(): Promise<void> {
     await this.loadSettings()
     this.store = new ProjectStore(this.app, () => this.settings.statuses)
+    this.store.registerCacheInvalidation(this)
     this.notifier = new Notifier(this)
     this.router = new PMViewRouter(this)
 
@@ -175,9 +176,7 @@ export default class PMPlugin extends Plugin {
       'pm-calendar': 'calendar'
     }
     for (const [lang, view] of Object.entries(VIEW_BY_LANG)) {
-      this.registerMarkdownCodeBlockProcessor(lang, (source, el, ctx) =>
-        this.renderEmbed(source, el, ctx, view)
-      )
+      this.registerMarkdownCodeBlockProcessor(lang, (source, el, ctx) => this.renderEmbed(source, el, ctx, view))
     }
 
     this.addSettingTab(new PMSettingTab(this.app, this))
@@ -202,7 +201,8 @@ export default class PMPlugin extends Plugin {
     const cache = this.app.metadataCache.getFileCache(file)
     // Accept boolean true (parsed YAML) or string "true" (edge cases on
     // freshly-modified files where the cache hasn't re-parsed yet).
-    const flag = cache?.frontmatter?.['pm-project']
+    const frontmatter = cache?.frontmatter
+    const flag: unknown = frontmatter?.['pm-project']
     if (flag !== true && flag !== 'true') return
 
     // Look for an existing pm-project leaf already rendering this file. If
@@ -212,7 +212,7 @@ export default class PMPlugin extends Plugin {
     this.app.workspace.iterateAllLeaves((leaf) => {
       if (existingProjectLeaf) return
       if (leaf.view.getViewType() !== PM_PROJECT_VIEW_TYPE) return
-      const vs = leaf.getViewState().state as Record<string, unknown> | undefined
+      const vs = leaf.getViewState().state
       if (vs && vs['filePath'] === file.path) existingProjectLeaf = leaf
     })
 
@@ -225,7 +225,7 @@ export default class PMPlugin extends Plugin {
 
     if (existingProjectLeaf) {
       for (const leaf of markdownLeaves) leaf.detach()
-      this.app.workspace.revealLeaf(existingProjectLeaf)
+      void this.app.workspace.revealLeaf(existingProjectLeaf)
       return
     }
 
@@ -239,16 +239,20 @@ export default class PMPlugin extends Plugin {
     // (an Obsidian quirk seen in some cases), fall back to detach + reopen
     // via the router, which mirrors the manual "Open current file as project"
     // command's behaviour.
-    target
-      .setViewState({ type: PM_PROJECT_VIEW_TYPE, state: { filePath: file.path }, active: true })
-      .then(() => {
-        this.app.workspace.revealLeaf(target)
-        if (target.view.getViewType() !== PM_PROJECT_VIEW_TYPE) {
-          target.detach()
-          void this.router.openProjectByPath(file.path)
-        }
-      })
-      .catch(() => undefined)
+    void this.openProjectLeaf(target, file)
+  }
+
+  private async openProjectLeaf(target: WorkspaceLeaf, file: TFile): Promise<void> {
+    try {
+      await target.setViewState({ type: PM_PROJECT_VIEW_TYPE, state: { filePath: file.path }, active: true })
+      await this.app.workspace.revealLeaf(target)
+      if (target.view.getViewType() !== PM_PROJECT_VIEW_TYPE) {
+        target.detach()
+        await this.router.openProjectByPath(file.path)
+      }
+    } catch (error) {
+      console.error('PMPlugin: failed to auto-open project view', error)
+    }
   }
 
   private async openAsMarkdown(leaf: WorkspaceLeaf, file: TFile): Promise<void> {
@@ -260,7 +264,7 @@ export default class PMPlugin extends Plugin {
       await leaf.setViewState({ type: 'markdown', state: { file: file.path, mode: 'source' } })
     } finally {
       // Restore on next tick so the in-flight file-open event has fired.
-      activeWindow.setTimeout(() => {
+      window.setTimeout(() => {
         this.settings.autoOpenProjects = saved
       }, 0)
     }
@@ -276,6 +280,7 @@ export default class PMPlugin extends Plugin {
     if (!saved?.statuses?.length) this.settings.statuses = DEFAULT_SETTINGS.statuses
     if (!saved?.priorities?.length) this.settings.priorities = DEFAULT_SETTINGS.priorities
     if (!this.settings.projectFilters) this.settings.projectFilters = {}
+    if (!this.settings.collapsedTasks) this.settings.collapsedTasks = {}
 
     let migrated = false
     for (const s of this.settings.statuses) {
@@ -312,10 +317,51 @@ export default class PMPlugin extends Plugin {
         dirty = true
       }
     }
+    const cleanedCollapsed: typeof this.settings.collapsedTasks = {}
+    for (const [path, ids] of Object.entries(this.settings.collapsedTasks)) {
+      if (this.app.vault.getAbstractFileByPath(path)) {
+        cleanedCollapsed[path] = ids
+      } else {
+        dirty = true
+      }
+    }
     if (dirty) {
       this.settings.projectFilters = cleaned
+      this.settings.collapsedTasks = cleanedCollapsed
       await this.saveSettings()
     }
+  }
+
+  /**
+   * Overlay the persisted collapsed-task state onto a freshly loaded project.
+   * Projects with no record yet keep whatever legacy frontmatter said.
+   */
+  applyCollapsedState(project: Project): void {
+    const ids = this.settings.collapsedTasks[project.filePath]
+    if (!ids) return
+    const set = new Set(ids)
+    for (const { task } of flattenTasks(project.tasks)) {
+      task.collapsed = set.has(task.id)
+    }
+  }
+
+  /** Persist the project's current collapsed flags. Call after toggling task.collapsed. */
+  async persistCollapsedState(project: Project): Promise<void> {
+    this.settings.collapsedTasks[project.filePath] = flattenTasks(project.tasks)
+      .filter((f) => f.task.collapsed)
+      .map((f) => f.task.id)
+    await this.saveSettings()
+  }
+
+  /**
+   * Flip a task's collapsed flag and persist. Resolves the task by id against
+   * the live tree so it works even when a view renders filtered clones.
+   */
+  async toggleTaskCollapsed(project: Project, taskId: string): Promise<void> {
+    const task = findTask(project.tasks, taskId)
+    if (!task) return
+    task.collapsed = !task.collapsed
+    await this.persistCollapsedState(project)
   }
 
   async saveSettings(): Promise<void> {
@@ -324,6 +370,13 @@ export default class PMPlugin extends Plugin {
 
   showNotice(msg: string, duration = 3000): void {
     new Notice(msg, duration)
+  }
+
+  /** Re-render every open project view, e.g. after a settings change affects rendering. */
+  refreshProjectViews(): void {
+    for (const leaf of this.app.workspace.getLeavesOfType(PM_PROJECT_VIEW_TYPE)) {
+      if (leaf.view instanceof ProjectView) void leaf.view.refreshProject()
+    }
   }
 
   /** Show project picker, then open TaskModal to create a task (optionally pick parent for subtask) */

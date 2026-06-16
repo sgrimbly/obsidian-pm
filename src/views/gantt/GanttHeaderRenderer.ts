@@ -258,29 +258,3 @@ function renderMonthBands(g: SVGGElement, y: number, h: number, ctx: RendererCon
     monthStart = nextMonthStart
   }
 }
-
-function renderYearBands(g: SVGGElement, y: number, h: number, ctx: RendererContext): void {
-  let date = Temporal.PlainDate.from({ year: ctx.cfg.startDate.year, month: 1, day: 1 })
-  while (Temporal.PlainDate.compare(date, ctx.cfg.endDate) < 0) {
-    const yearEnd = date.add({ years: 1 })
-    const x1 = Math.max(0, dateToX(ctx.cfg, date))
-    const x2 = Math.min(ctx.cfg.totalWidth, dateToX(ctx.cfg, yearEnd))
-    g.appendChild(
-      svgEl('rect', {
-        x: x1,
-        y,
-        width: x2 - x1,
-        height: h,
-        class: date.year % 2 === 0 ? 'pm-gantt-band-even' : 'pm-gantt-band-odd'
-      })
-    )
-    const text = svgEl('text', {
-      x: x1 + 6,
-      y: y + h - 6,
-      class: 'pm-gantt-header-year'
-    })
-    text.textContent = String(date.year)
-    g.appendChild(text)
-    date = yearEnd
-  }
-}

@@ -3,7 +3,7 @@ import { Chip } from './primitives/Chip'
 
 export function renderPropRow(container: HTMLElement, label: string, valueBuilder: () => HTMLElement): HTMLElement {
   const row = container.createDiv('pm-prop-row')
-  row.createEl('span', { text: label, cls: 'pm-prop-label' })
+  row.createSpan({ text: label, cls: 'pm-prop-label' })
   const valueEl = valueBuilder()
   row.appendChild(valueEl)
   return row
@@ -24,16 +24,18 @@ export function renderChipList(container: HTMLElement, items: string[], opts: Ch
   const variant = opts.variant ?? 'default'
   const shape = opts.shape ?? 'pill'
   for (const item of items) {
-    new Chip(container)
+    const chip = new Chip(container)
       .setLabel(opts.labelFn ? opts.labelFn(item) : item)
-      .setVariant(variant)
       .setShape(shape)
       .setRemovable(() => opts.onRemove(item))
+    if (variant === 'accent') chip.setVariant('solid').setColor('var(--interactive-accent)')
+    else chip.setVariant('outline')
   }
   if (opts.renderAdd) {
     opts.renderAdd(container)
   } else if (opts.onAdd) {
-    new ButtonComponent(container).setButtonText(opts.addLabel ?? '+ Add').onClick((e) => opts.onAdd!(e))
+    const onAdd = opts.onAdd
+    new ButtonComponent(container).setButtonText(opts.addLabel ?? '+ Add').onClick((e) => onAdd(e))
   }
 }
 
@@ -48,7 +50,7 @@ export function renderProgressSlider(
   slider.max = '100'
   slider.step = '5'
   slider.value = String(value)
-  const label = wrap.createEl('span', { text: `${value}%`, cls: 'pm-progress-slider-label' })
+  const label = wrap.createSpan({ text: `${value}%`, cls: 'pm-progress-slider-label' })
   slider.addEventListener('input', () => {
     const v = parseInt(slider.value)
     label.textContent = `${v}%`

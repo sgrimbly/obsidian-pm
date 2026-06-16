@@ -20,7 +20,6 @@ export class ImportModal extends Modal {
   private nextButton: HTMLButtonElement | null = null
   private fileListContainer: HTMLDivElement | null = null
   private counterLabel: HTMLDivElement | null = null
-  private onConfirm: ((selectedFiles: TFile[]) => void) | null = null
 
   // Phase 2 state
   private phase: 1 | 2 = 1
@@ -188,7 +187,7 @@ export class ImportModal extends Modal {
       this.fileHandling = 'move'
     })
 
-    moveLabel.createEl('span', { text: 'Move to tasks folder (default)' })
+    moveLabel.createSpan({ text: 'Move to tasks folder (default)' })
 
     // Copy option
     const copyLabel = radioGroup.createEl('label')
@@ -201,7 +200,7 @@ export class ImportModal extends Modal {
       this.fileHandling = 'copy'
     })
 
-    copyLabel.createEl('span', { text: 'Copy (keep original)' })
+    copyLabel.createSpan({ text: 'Copy (keep original)' })
 
     // ── Footer ───────────────────────────────────────────────────────────────
     const footer = contentEl.createDiv('import-modal-footer')
@@ -223,14 +222,15 @@ export class ImportModal extends Modal {
   }
 
   private renderFileList(): void {
-    if (!this.fileListContainer) return
+    const fileListContainer = this.fileListContainer
+    if (!fileListContainer) return
 
     // Clear existing items (keep the select-all row)
-    const items = this.fileListContainer.querySelectorAll('.import-file-item')
+    const items = fileListContainer.querySelectorAll('.import-file-item')
     items.forEach((item) => item.remove())
 
     this.filteredFiles.forEach((item) => {
-      const row = this.fileListContainer!.createDiv('import-file-item suggestion-item')
+      const row = fileListContainer.createDiv('import-file-item suggestion-item')
       this.applyRowStyles(row, item.selected)
 
       const checkbox = row.createEl('input', { type: 'checkbox' })
@@ -244,8 +244,8 @@ export class ImportModal extends Modal {
         this.applyRowStyles(row, item.selected)
       })
 
-      row.createEl('span', { text: item.file.basename, cls: 'import-file-name' })
-      row.createEl('span', { text: item.folder, cls: 'import-file-folder' })
+      row.createSpan({ text: item.file.basename, cls: 'import-file-name' })
+      row.createSpan({ text: item.folder, cls: 'import-file-folder' })
 
       row.addEventListener('click', (e) => {
         // Don't toggle if clicking the checkbox itself — let native change event handle it
@@ -344,7 +344,7 @@ export class ImportModal extends Modal {
           })
 
           // Generate file path for task
-          const newFilePath = taskFilePath(task.title, task.id, tasksFolder)
+          const newFilePath = taskFilePath(task.title, tasksFolder)
 
           // Serialize task to file content
           const newContent = serializeTask(task, this.project, null)
@@ -405,15 +405,11 @@ export class ImportModal extends Modal {
     }
   }
 
-  setOnConfirm(callback: (selectedFiles: TFile[]) => void): void {
-    this.onConfirm = callback
-  }
-
   setProject(project: Project): void {
     this.project = project
   }
 
-  setOnImportComplete(callback: () => void): void {
-    this.onImportComplete = callback
+  setOnImportComplete(handler: () => void): void {
+    this.onImportComplete = handler
   }
 }

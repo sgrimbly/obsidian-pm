@@ -2,7 +2,6 @@ import { ButtonComponent } from 'obsidian'
 import type PMPlugin from '../main'
 import type { Task } from '../types'
 import { makeTask } from '../types'
-import { COLOR_MUTED } from '../constants'
 import { getStatusConfig, isTerminalStatus, getCompleteStatusId, getDefaultStatusId } from '../utils'
 
 /**
@@ -30,10 +29,10 @@ export function renderSubtasksPanel(container: HTMLElement, task: Task, plugin: 
         renderSubtasks()
       })
 
-      const dot = row.createEl('span', { cls: 'pm-subtask-dot' })
-      dot.setCssStyles({ background: subStatus?.color ?? COLOR_MUTED })
+      const dot = row.createSpan({ cls: 'pm-subtask-dot' })
+      dot.setCssStyles({ background: subStatus?.color ?? 'var(--text-muted)' })
 
-      const titleEl = row.createEl('span', { text: sub.title, cls: 'pm-subtask-title' })
+      const titleEl = row.createSpan({ text: sub.title, cls: 'pm-subtask-title' })
       titleEl.contentEditable = 'true'
       titleEl.addEventListener('blur', () => {
         sub.title = titleEl.textContent?.trim() ?? sub.title
@@ -49,10 +48,10 @@ export function renderSubtasksPanel(container: HTMLElement, task: Task, plugin: 
   renderSubtasks()
 
   addSubBtn.onClick(() => {
-    const newSub = makeTask({ title: 'New subtask' })
+    const newSub = makeTask({ title: 'New subtask', type: 'subtask' })
     task.subtasks.push(newSub)
     renderSubtasks()
-    activeWindow.setTimeout(() => {
+    window.setTimeout(() => {
       const rows = subList.querySelectorAll('.pm-subtask-title')
       const last = rows[rows.length - 1] as HTMLElement
       if (last) {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { makeTask, type Task } from '../types'
 import {
   addTaskToTree,
   collectAllAssignees,
@@ -12,7 +13,6 @@ import {
   totalLoggedHours,
   updateTaskInTree
 } from './TaskTreeOps'
-import { makeTask, type Task } from '../types'
 
 function task(overrides: Partial<Task> & { id: string }): Task {
   return makeTask(overrides)
@@ -280,18 +280,12 @@ describe('sortTaskTree', () => {
       task({
         id: 'parent-a',
         start: '2026-05-01',
-        subtasks: [
-          task({ id: 'a-late', start: '2026-07-01' }),
-          task({ id: 'a-early', start: '2026-06-01' })
-        ]
+        subtasks: [task({ id: 'a-late', start: '2026-07-01' }), task({ id: 'a-early', start: '2026-06-01' })]
       }),
       task({
         id: 'parent-b',
         start: '2026-04-01',
-        subtasks: [
-          task({ id: 'b-late', start: '2026-09-01' }),
-          task({ id: 'b-early', start: '2026-08-01' })
-        ]
+        subtasks: [task({ id: 'b-late', start: '2026-09-01' }), task({ id: 'b-early', start: '2026-08-01' })]
       })
     ]
     const sorted = sortTaskTree(tasks, 'start-asc')

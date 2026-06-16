@@ -2,6 +2,7 @@ import { App, ButtonComponent, Component, ExtraButtonComponent, Modal, MarkdownR
 import type PMPlugin from '../main'
 import { Project, Task, makeTask } from '../types'
 import { flattenTasks } from '../store/TaskTreeOps'
+import { TaskFileNameConflictError } from '../store'
 import { safeAsync, getDefaultStatusId } from '../utils'
 import { renderStatusDot } from '../ui/StatusBadge'
 import { confirmDialog } from '../ui/ModalFactory'
@@ -42,6 +43,7 @@ export class TaskModal extends Modal {
       this.task = makeTask({
         status: getDefaultStatusId(plugin.settings.statuses),
         priority: 'medium',
+        type: parentId ? 'subtask' : 'task',
         ...defaults
       })
       this.isNew = true
@@ -65,7 +67,12 @@ export class TaskModal extends Modal {
       !this.saved &&
       this.task.title.trim()
     ) {
-      void this.persistTask()
+      const conflict = this.plugin.store.findTaskFileConflict(this.project, this.task)
+      if (conflict) {
+        new Notice(`Task not saved: a note named "${conflict.fileName}" already exists.`)
+      } else {
+        void this.persistTask()
+      }
     }
     this.noteSuggest?.destroy()
     this.noteSuggest = null
@@ -74,21 +81,27 @@ export class TaskModal extends Modal {
 
   private persistTask(): Promise<void> {
     if (this.persistPromise) return this.persistPromise
-    this.persistPromise = this.runPersist()
-    return this.persistPromise
+    const p = (async () => {
+      try {
+        await this.runPersist()
+      } catch (err) {
+        this.persistPromise = null
+        throw err
+      }
+    })()
+    this.persistPromise = p
+    return p
   }
 
   private async insertAttachments(
     descArea: HTMLTextAreaElement,
     items: { blob: Blob; name: string }[],
-    sourcePath: string,
     autoResize: () => void
   ): Promise<void> {
     for (const { blob, name } of items) {
       try {
-        const path = await this.app.fileManager.getAvailablePathForAttachment(name, sourcePath)
         const buffer = await blob.arrayBuffer()
-        const file = await this.app.vault.createBinary(path, buffer)
+        const file = await this.plugin.store.saveTaskAttachment(this.project, this.task, name, buffer)
         const snippet = `![[${file.name}]]`
         descArea.setRangeText(snippet, descArea.selectionStart, descArea.selectionEnd, 'end')
         this.task.description = descArea.value
@@ -123,14 +136,30 @@ export class TaskModal extends Modal {
     const header = contentEl.createDiv('pm-modal-header')
     renderStatusDot(header, this.task.status, this.plugin.settings.statuses, 'pm-modal-status-dot')
 
-    const titleInput = header.createEl('input', {
+    const titleWrap = header.createDiv('pm-modal-title-wrap')
+    const titleInput = titleWrap.createEl('input', {
       type: 'text',
       cls: 'pm-modal-title-input',
       value: this.task.title
     })
     titleInput.placeholder = 'Task title\u2026'
+    const titleError = titleWrap.createDiv({ cls: 'pm-modal-title-error', attr: { hidden: '' } })
+    const clearTitleError = () => {
+      if (titleError.hasAttribute('hidden')) return
+      titleError.setAttribute('hidden', '')
+      titleError.setText('')
+      titleInput.classList.remove('pm-input-error')
+    }
+    const showTitleError = (message: string) => {
+      titleError.setText(message)
+      titleError.removeAttribute('hidden')
+      titleInput.classList.add('pm-input-error')
+      titleInput.focus()
+      titleInput.select()
+    }
     titleInput.addEventListener('input', () => {
       this.task.title = titleInput.value
+      clearTitleError()
     })
     titleInput.focus()
     titleInput.select()
@@ -225,7 +254,7 @@ export class TaskModal extends Modal {
       descPreview.classList.add('pm-hidden')
       descArea.classList.remove('pm-hidden')
       descArea.value = this.task.description
-      activeWindow.setTimeout(() => {
+      window.setTimeout(() => {
         autoResize()
         descArea.focus()
       }, 0)
@@ -248,7 +277,7 @@ export class TaskModal extends Modal {
       const items = e.clipboardData?.items
       if (!items) return
       const attachments: { blob: Blob; name: string }[] = []
-      for (const item of items) {
+      for (const item of Array.from(items)) {
         if (item.kind === 'file' && item.type.startsWith('image/')) {
           const file = item.getAsFile()
           if (file) {
@@ -261,7 +290,7 @@ export class TaskModal extends Modal {
       }
       if (attachments.length === 0) return
       e.preventDefault()
-      void this.insertAttachments(descArea, attachments, sourcePath, autoResize)
+      void this.insertAttachments(descArea, attachments, autoResize)
     })
 
     descSection.addEventListener('dragover', (e) => {
@@ -279,7 +308,7 @@ export class TaskModal extends Modal {
         descArea.selectionStart = descArea.selectionEnd = descArea.value.length
       }
       const attachments = Array.from(files).map((f) => ({ blob: f, name: f.name }))
-      void this.insertAttachments(descArea, attachments, sourcePath, autoResize)
+      void this.insertAttachments(descArea, attachments, autoResize)
     })
 
     // Note link suggest (inline [[ autocomplete)
@@ -321,7 +350,7 @@ export class TaskModal extends Modal {
       void renderPreview()
     } else {
       descPreview.classList.add('pm-hidden')
-      activeWindow.setTimeout(autoResize, 0)
+      window.setTimeout(autoResize, 0)
     }
 
     // ── Properties ─────────────────────────────────────────────────────────
@@ -412,25 +441,38 @@ export class TaskModal extends Modal {
       .setButtonText(this.isNew ? 'Create (Shift+Enter)' : 'Save (Shift+Enter)')
       .setCta()
     let saving = false
-    const doSave = safeAsync(async () => {
+    const doSave = async () => {
       if (saving) return
       saving = true
-      if (!this.task.title.trim()) {
+      try {
+        if (!this.task.title.trim()) {
+          titleInput.focus()
+          titleInput.classList.add('pm-input-error')
+          return
+        }
+        clearTitleError()
+        await this.persistTask()
+        this.saved = true
+        this.close()
+      } catch (err) {
+        if (err instanceof TaskFileNameConflictError) {
+          showTitleError(`A note named "${err.fileName}" already exists. Choose a different title.`)
+          return
+        }
+        console.error('[PM]', err)
+        new Notice('Something went wrong. Check the console for details.')
+      } finally {
         saving = false
-        titleInput.focus()
-        titleInput.classList.add('pm-input-error')
-        return
       }
-      await this.persistTask()
-      this.saved = true
-      this.close()
-    })
+    }
 
-    saveBtn.onClick(doSave)
+    saveBtn.onClick(() => {
+      void doSave()
+    })
     this.modalEl.addEventListener('keydown', (e: KeyboardEvent) => {
       if (e.key === 'Enter' && e.shiftKey) {
         e.preventDefault()
-        doSave()
+        void doSave()
       }
     })
   }

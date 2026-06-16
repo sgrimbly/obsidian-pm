@@ -1,7 +1,6 @@
 import { Notice } from 'obsidian'
 import type { Task } from '../../types'
 import { openTaskModal } from '../../ui/ModalFactory'
-import { COLOR_ACCENT } from '../../constants'
 import { svgEl, getStatusConfig, safeAsync } from '../../utils'
 import { parsePlainDate } from '../../dates'
 import {
@@ -29,7 +28,7 @@ export function renderTaskBar(g: SVGGElement, task: Task, row: number, _depth: n
   }
 
   const statusConfig = getStatusConfig(ctx.plugin.settings.statuses, task.status)
-  const color = statusConfig?.color ?? COLOR_ACCENT
+  const color = statusConfig?.color ?? getComputedStyle(ctx.svgEl).getPropertyValue('--interactive-accent').trim()
   const rowY = HEADER_HEIGHT + row * ROW_HEIGHT
   const y = rowY + BAR_PADDING
   const height = ROW_HEIGHT - BAR_PADDING * 2
@@ -53,7 +52,8 @@ export function renderTaskBar(g: SVGGElement, task: Task, row: number, _depth: n
 
   // Normal task bar. A task with end date E occupies the day E, so the bar
   // right edge sits at the start of E+1.
-  const effectiveStart = startDate ?? endDate!
+  const effectiveStart = startDate ?? endDate
+  if (!effectiveStart) return
   const effectiveEnd = (endDate ?? effectiveStart).add({ days: 1 })
 
   const x = Math.max(0, dateToX(ctx.cfg, effectiveStart))
@@ -73,13 +73,13 @@ export function renderTaskBar(g: SVGGElement, task: Task, row: number, _depth: n
     rx: BAR_BORDER_RADIUS,
     ry: BAR_BORDER_RADIUS,
     fill: color,
-    opacity: 0.75,
+    opacity: 0.4,
     class: 'pm-gantt-bar'
   })
   barGroup.appendChild(rect)
 
-  // Progress overlay
-  if (task.progress > 0 && task.progress < 100) {
+  // Completed portion — solid fill over the faint track so progress reads at a glance
+  if (task.progress > 0) {
     const pw = (task.progress / 100) * width
     barGroup.appendChild(
       svgEl('rect', {
@@ -90,23 +90,8 @@ export function renderTaskBar(g: SVGGElement, task: Task, row: number, _depth: n
         rx: BAR_BORDER_RADIUS,
         ry: BAR_BORDER_RADIUS,
         fill: color,
-        opacity: 0.35,
+        opacity: 0.9,
         class: 'pm-gantt-bar-progress'
-      })
-    )
-  }
-
-  // Subtask stripe
-  if (task.subtasks.length > 0) {
-    barGroup.appendChild(
-      svgEl('rect', {
-        x,
-        y: y + height - 3,
-        width,
-        height: 3,
-        rx: 1.5,
-        fill: color,
-        opacity: 0.5
       })
     )
   }
@@ -146,8 +131,7 @@ export function renderTaskBar(g: SVGGElement, task: Task, row: number, _depth: n
     // Make the overflow label itself a click target — useful for
     // single-day tasks at year/quarter zoom where the bar is just a
     // few pixels wide.
-    label.style.cursor = 'pointer'
-    label.style.pointerEvents = 'auto'
+    label.classList.add('pm-gantt-bar-label-clickable')
     label.addEventListener('click', (e: MouseEvent) => {
       e.stopPropagation()
       openTaskModal(ctx.plugin, ctx.project, {
@@ -374,8 +358,7 @@ function renderMilestoneDiamond(g: SVGGElement, task: Task, row: number, color: 
     class: 'pm-gantt-milestone-label-inline'
   })
   label.textContent = task.title
-  label.style.cursor = 'pointer'
-  label.style.pointerEvents = 'auto'
+  label.classList.add('pm-gantt-milestone-label-clickable')
   label.addEventListener('click', (e: MouseEvent) => {
     e.stopPropagation()
     openTaskModal(ctx.plugin, ctx.project, { task, onSave: () => ctx.onRefresh() })
@@ -396,7 +379,7 @@ export function renderMilestoneLabels(ctx: RendererContext): void {
     if (!date) continue
     const x = dateToX(ctx.cfg, date) + ctx.cfg.dayWidth / 2
     const statusConfig = getStatusConfig(ctx.plugin.settings.statuses, task.status)
-    const color = statusConfig?.color ?? COLOR_ACCENT
+    const color = statusConfig?.color ?? getComputedStyle(ctx.svgEl).getPropertyValue('--interactive-accent').trim()
 
     const totalH = HEADER_HEIGHT + ctx.flatTasks.filter((f) => f.visible || f.depth === 0).length * ROW_HEIGHT
     labelsG.appendChild(

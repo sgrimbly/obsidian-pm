@@ -70,7 +70,8 @@ export class PrimaryRow {
       }
     })
     const btn = new ButtonComponent(wrap)
-    btn.setIcon('search')
+    btn
+      .setIcon('search')
       .setTooltip('Search in vault (Shift+Enter)')
       .onClick(() => this.props.onSearchInVault())
     btn.buttonEl.addClass('pm-project-header-search-vault-btn')

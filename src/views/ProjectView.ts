@@ -92,8 +92,9 @@ export class ProjectView extends ItemView {
     }
     this.fileModifyRef = this.app.vault.on('modify', (file) => {
       if (!(file instanceof TFile) || !reloadIfRelevant(file.path)) return
-      if (this.reloadDebounceTimer !== null) activeWindow.clearTimeout(this.reloadDebounceTimer)
-      this.reloadDebounceTimer = activeWindow.setTimeout(
+      if (this.plugin.store.consumeSelfWrite(file.path)) return
+      if (this.reloadDebounceTimer !== null) window.clearTimeout(this.reloadDebounceTimer)
+      this.reloadDebounceTimer = window.setTimeout(
         safeAsync(async () => {
           this.reloadDebounceTimer = null
           await this.loadProject()
@@ -106,9 +107,9 @@ export class ProjectView extends ItemView {
       this.app.vault.on(
         'delete',
         safeAsync(async (file) => {
-          if (reloadIfRelevant(file.path)) {
-            await this.loadProject()
-          }
+          if (!reloadIfRelevant(file.path)) return
+          if (this.plugin.store.consumeSelfWrite(file.path)) return
+          await this.loadProject()
         })
       )
     )
@@ -116,7 +117,7 @@ export class ProjectView extends ItemView {
 
   onClose(): Promise<void> {
     if (this.reloadDebounceTimer !== null) {
-      activeWindow.clearTimeout(this.reloadDebounceTimer)
+      window.clearTimeout(this.reloadDebounceTimer)
       this.reloadDebounceTimer = null
     }
     if (this.keydownHandler) {
@@ -140,6 +141,7 @@ export class ProjectView extends ItemView {
       this.renderMissingProject()
       return
     }
+    this.plugin.applyCollapsedState(this.project)
     this.loadFilterFromSettings()
     ;(this.leaf as WorkspaceLeaf & { updateHeader?: () => void }).updateHeader?.()
     this.renderProjectToolbar()
@@ -335,7 +337,7 @@ export class ProjectView extends ItemView {
     this.toolbarEl.empty()
 
     const left = this.toolbarEl.createDiv('pm-toolbar-left')
-    const iconEl = left.createEl('span', {
+    const iconEl = left.createSpan({
       text: this.project.icon,
       cls: 'pm-toolbar-icon',
       attr: { 'aria-label': 'Edit project', role: 'button', tabindex: '0' }
@@ -465,22 +467,38 @@ export class ProjectView extends ItemView {
         this.subview = new KanbanView(this.bodyEl, this.project, this.plugin, () => this.refreshProject(), this.filter)
         break
       case 'calendar':
-        this.subview = new CalendarView(this.bodyEl, this.project, this.plugin, () => this.refreshProject(), this.filter)
+        this.subview = new CalendarView(
+          this.bodyEl,
+          this.project,
+          this.plugin,
+          () => this.refreshProject(),
+          this.filter
+        )
         break
     }
+    this.bodyEl.toggleClass('pm-content--kanban', this.currentView === 'kanban')
     this.subview?.render()
   }
 
+  /**
+   * Re-render after a plugin-initiated mutation. Store mutators update
+   * project.tasks in place before they await the save, so memory is already
+   * current and no disk reload is needed. External edits come in through the
+   * modify/delete listeners in onOpen. Prefers the subview's in-place refresh
+   * over a full destroy-and-rebuild.
+   */
   async refreshProject(): Promise<void> {
-    if (!this.filePath) return
+    if (!this.project) return
     if (this.reloadDebounceTimer !== null) {
-      activeWindow.clearTimeout(this.reloadDebounceTimer)
+      window.clearTimeout(this.reloadDebounceTimer)
       this.reloadDebounceTimer = null
     }
-    const file = this.app.vault.getAbstractFileByPath(this.filePath)
-    if (file instanceof TFile) {
-      this.project = await this.plugin.store.loadProject(file)
+    if (this.subview?.refresh) {
+      this.subview.refresh()
+    } else if (this.subview) {
+      this.subview.render()
+    } else {
+      this.renderCurrentView()
     }
-    this.renderCurrentView()
   }
 }

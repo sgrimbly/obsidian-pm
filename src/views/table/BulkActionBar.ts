@@ -1,6 +1,7 @@
 import { ButtonComponent, ExtraButtonComponent, Menu } from 'obsidian'
 import type { Task, TaskStatus, TaskPriority } from '../../types'
-import { findTask, flattenTasks, collectAllAssignees, collectAllTags } from '../../store'
+import { flattenTasks, collectAllAssignees, collectAllTags } from '../../store'
+import { findTaskById } from '../../store/TaskIndex'
 import { formatBadgeText } from '../../utils'
 import { today } from '../../dates'
 import { promptText } from '../../ui/ModalFactory'
@@ -56,7 +57,7 @@ function updateBarContent(bar: HTMLElement, ctx: TableContext, onAction: (a: Bul
 
   // Left section: count + actions
   const left = bar.createDiv('pm-bulk-bar-left')
-  left.createEl('span', { text: `${count} selected`, cls: 'pm-bulk-bar-count' })
+  left.createSpan({ text: `${count} selected`, cls: 'pm-bulk-bar-count' })
 
   // Status button
   new ButtonComponent(left).setButtonText('Set status').onClick((e) => {
@@ -145,7 +146,7 @@ function updateBarContent(bar: HTMLElement, ctx: TableContext, onAction: (a: Bul
     menu.addSeparator()
     menu.addItem((item) =>
       item.setTitle('Pick date...').onClick(() => {
-        const input = activeDocument.createElement('input')
+        const input = activeDocument.createEl('input')
         input.type = 'date'
         input.addClass('pm-offscreen')
         activeDocument.body.appendChild(input)
@@ -153,7 +154,7 @@ function updateBarContent(bar: HTMLElement, ctx: TableContext, onAction: (a: Bul
           if (input.value) onAction({ type: 'set-due-date', due: input.value })
           input.remove()
         })
-        input.addEventListener('blur', () => activeWindow.setTimeout(() => input.remove(), 200))
+        input.addEventListener('blur', () => window.setTimeout(() => input.remove(), 200))
         input.showPicker()
       })
     )
@@ -177,7 +178,7 @@ function updateBarContent(bar: HTMLElement, ctx: TableContext, onAction: (a: Bul
     // Collect all descendants of selected tasks to prevent circular refs
     const excludedIds = new Set<string>(selectedIdSet)
     for (const id of selectedIdSet) {
-      const task = findTask(ctx.project.tasks, id)
+      const task = findTaskById(ctx.project, id)
       if (task) {
         for (const ft of flattenTasks(task.subtasks)) {
           excludedIds.add(ft.task.id)
@@ -197,7 +198,7 @@ function updateBarContent(bar: HTMLElement, ctx: TableContext, onAction: (a: Bul
 
   // Archive / Unarchive button — show based on selected tasks' state
   const selectedIds = [...ctx.state.selectedTaskIds]
-  const selectedTasks = selectedIds.map((id) => findTask(ctx.project.tasks, id)).filter(Boolean) as Task[]
+  const selectedTasks = selectedIds.map((id) => findTaskById(ctx.project, id)).filter(Boolean) as Task[]
   const hasArchived = selectedTasks.some((t) => t.archived)
   const hasNonArchived = selectedTasks.some((t) => !t.archived)
 
@@ -223,8 +224,8 @@ function updateBarContent(bar: HTMLElement, ctx: TableContext, onAction: (a: Bul
       ctx.state.selectedTaskIds.clear()
       if (ctx.state.tableBody) {
         const cbs = ctx.state.tableBody.querySelectorAll('.pm-select-checkbox')
-        cbs.forEach((cb) => {
-          ;(cb as HTMLInputElement).checked = false
+        cbs.forEach((checkbox) => {
+          ;(checkbox as HTMLInputElement).checked = false
         })
       }
       updateSelectAllCheckbox(ctx.state)

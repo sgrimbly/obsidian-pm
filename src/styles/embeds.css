@@ -1,0 +1,45 @@
+/* Inline code-block embeds: pm-gantt, pm-table, pm-kanban, pm-calendar */
+.pm-embed {
+  margin: 0.6em 0 1em;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--background-primary);
+  overflow: hidden;
+}
+
+.pm-embed-viewport {
+  position: relative;
+  overflow: hidden;
+}
+
+.pm-embed-viewport > .pm-gantt-view,
+.pm-embed-viewport > .pm-table-view,
+.pm-embed-viewport > .pm-kanban-view,
+.pm-embed-viewport > .pm-calendar-view {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.pm-embed-viewport .pm-gantt-wrapper {
+  flex: 1;
+  min-height: 0;
+}
+
+.pm-embed-error {
+  padding: 14px 18px;
+  background: color-mix(in srgb, var(--text-error, var(--color-red)) 8%, var(--background-primary));
+  border-left: 3px solid var(--text-error, var(--color-red));
+}
+
+.pm-embed-error-title {
+  font-weight: 600;
+  color: var(--text-error, var(--color-red));
+  margin-bottom: 4px;
+}
+
+.pm-embed-error-msg {
+  font-size: 0.9em;
+  color: var(--text-muted);
+  font-family: var(--font-monospace);
+}

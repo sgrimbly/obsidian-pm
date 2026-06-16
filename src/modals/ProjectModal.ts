@@ -1,15 +1,15 @@
 import { App, ButtonComponent, Modal } from 'obsidian'
 import type PMPlugin from '../main'
 import { Project, CustomFieldDef, makeId, makeProject } from '../types'
+import { rebuildTaskIndex } from '../store'
 import { safeAsync } from '../utils'
 import { Avatar } from '../ui/primitives/Avatar'
-import { COLOR_DANGER } from '../constants'
 
 const PROJECT_COLORS = [
   '#8b72be',
   '#7c6b9a',
   '#b07d9e',
-  COLOR_DANGER,
+  '#c47070',
   '#b8a06b',
   '#79b58d',
   '#6ba8a0',
@@ -41,6 +41,8 @@ export class ProjectModal extends Modal {
     super(app)
     if (existingProject) {
       this.project = JSON.parse(JSON.stringify(existingProject)) as Project
+      // The JSON round-trip turns the taskIndex Map into a plain object.
+      rebuildTaskIndex(this.project)
       this.isNew = false
     } else {
       this.project = makeProject('New Project', '')
@@ -63,7 +65,7 @@ export class ProjectModal extends Modal {
   private buildForm(el: HTMLElement): void {
     // ── Header ────────────────────────────────────────────────────────────────
     const header = el.createDiv('pm-project-modal-header')
-    header.createEl('span', { text: '✦', cls: 'pm-project-modal-header-icon' })
+    header.createSpan({ text: '✦', cls: 'pm-project-modal-header-icon' })
     header.createEl('h2', {
       text: this.isNew ? 'New project' : 'Project settings',
       cls: 'pm-modal-heading'
@@ -102,7 +104,7 @@ export class ProjectModal extends Modal {
     titleInput.addEventListener('input', () => {
       this.project.title = titleInput.value
     })
-    activeWindow.setTimeout(() => {
+    window.setTimeout(() => {
       titleInput.focus()
       titleInput.select()
     }, 50)
@@ -172,7 +174,7 @@ export class ProjectModal extends Modal {
       addBtn.addEventListener('click', () => {
         this.project.teamMembers.push('')
         renderMembers()
-        activeWindow.setTimeout(() => {
+        window.setTimeout(() => {
           const inputs = memberWrap.querySelectorAll('input')
           inputs[inputs.length - 1]?.focus()
         }, 50)
@@ -183,8 +185,8 @@ export class ProjectModal extends Modal {
     // ── Custom fields ─────────────────────────────────────────────────────────
     const cfSection = el.createDiv('pm-modal-section')
     const cfHeader = cfSection.createDiv('pm-modal-section-header')
-    cfHeader.createEl('span', { text: 'Custom fields', cls: 'pm-modal-subheading' })
-    cfHeader.createEl('span', { text: 'Extra properties for tasks', cls: 'pm-modal-hint' })
+    cfHeader.createSpan({ text: 'Custom fields', cls: 'pm-modal-subheading' })
+    cfHeader.createSpan({ text: 'Extra properties for tasks', cls: 'pm-modal-hint' })
 
     const cfList = cfSection.createDiv('pm-cf-list')
     const renderCFs = () => {

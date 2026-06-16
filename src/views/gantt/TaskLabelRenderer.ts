@@ -1,8 +1,7 @@
 import type PMPlugin from '../../main'
 import type { Project, Task } from '../../types'
-import { moveTaskInTree } from '../../store/TaskTreeOps'
+import { CollapseToggle } from '../../ui/primitives/CollapseToggle'
 import { openTaskModal } from '../../ui/ModalFactory'
-import { COLOR_MUTED } from '../../constants'
 import { getStatusConfig, safeAsync } from '../../utils'
 import { ROW_HEIGHT } from './TimelineConfig'
 
@@ -52,43 +51,38 @@ export function renderTaskLabel(
       el.removeClass('pm-gantt-label-row--drop-before', 'pm-gantt-label-row--drop-after')
       const draggedId = e.dataTransfer?.getData('text/plain')
       if (!draggedId || draggedId === task.id) return
-      moveTaskInTree(ctx.project.tasks, draggedId, task.id, dropPosition)
-      await ctx.plugin.store.saveProject(ctx.project)
+      await ctx.plugin.store.reorderTask(ctx.project, draggedId, task.id, dropPosition)
       await ctx.onRefresh()
     })
   )
 
-  // Expand button
+  // Expand toggle
   if (task.subtasks.length > 0) {
-    const btn = el.createEl('button', {
-      text: task.collapsed ? '▶' : '▼',
-      cls: 'pm-gantt-expand-btn'
-    })
-    btn.addEventListener(
-      'click',
-      safeAsync(async () => {
-        await ctx.plugin.store.updateTask(ctx.project, task.id, { collapsed: !task.collapsed })
+    new CollapseToggle(el, {
+      collapsed: task.collapsed,
+      onToggle: safeAsync(async () => {
+        await ctx.plugin.toggleTaskCollapsed(ctx.project, task.id)
         await ctx.onRefresh()
       })
-    )
+    })
   } else {
-    el.createEl('span', { cls: 'pm-gantt-label-spacer' })
+    el.createSpan({ cls: 'pm-gantt-label-spacer' })
   }
 
   // Color dot
   const statusConfig = getStatusConfig(ctx.plugin.settings.statuses, task.status)
-  const dot = el.createEl('span', { cls: 'pm-gantt-label-dot' })
-  dot.style.background = statusConfig?.color ?? COLOR_MUTED
+  const dot = el.createSpan({ cls: 'pm-gantt-label-dot' })
+  dot.style.background = statusConfig?.color ?? 'var(--text-muted)'
 
   // Title
-  const titleEl = el.createEl('span', { text: task.title, cls: 'pm-gantt-label-title' })
+  const titleEl = el.createSpan({ text: task.title, cls: 'pm-gantt-label-title' })
   titleEl.addEventListener('click', () => {
     openTaskModal(ctx.plugin, ctx.project, { task, onSave: () => ctx.onRefresh() })
   })
 
   // Progress %
   if (task.progress > 0) {
-    el.createEl('span', { text: `${task.progress}%`, cls: 'pm-gantt-label-progress' })
+    el.createSpan({ text: `${task.progress}%`, cls: 'pm-gantt-label-progress' })
   }
 
   // "+" button to add subtask (hover-visible)
