@@ -11,3 +11,6 @@ PLANNING.md
 NOTES.local.md
 *.local.md
 .plans/
+
+# graphify knowledge-graph cache
+graphify-out/
